@@ -24,11 +24,18 @@ public static class TextBridge
         return await CopySelectionAsync();
     }
 
-    /// <summary>Puts <paramref name="text"/> where the selection was in <paramref name="target"/>.</summary>
-    public static async Task ReplaceSelectionAsync(IntPtr target, string text)
+    /// <summary>
+    /// Puts <paramref name="text"/> where <paramref name="original"/> is selected in <paramref name="target"/>.
+    /// If the app dropped the selection meanwhile, it is found and selected again first, so the
+    /// paste replaces the original instead of landing after it.
+    /// </summary>
+    public static async Task ReplaceSelectionAsync(IntPtr target, string original, string text)
     {
-        if (target != IntPtr.Zero) Native.SetForegroundWindow(target);
-        await Task.Delay(120);
+        if (target != IntPtr.Zero && Native.GetForegroundWindow() != target) Native.SetForegroundWindow(target);
+        await Task.Delay(80);
+        var check = Task.Run(() => EnsureSelected(original));
+        var outcome = await Task.WhenAny(check, Task.Delay(1500)) == check ? check.Result : "timeout";
+        DebugLog.Note($"replace in {Native.Describe(Native.GetForegroundWindow())}: selection {outcome}");
         var saved = ClipboardSnapshot.Take();
         if (!TrySetClipboard(() => Clipboard.SetText(text))) return;
         await ReleaseModifiersAsync();
@@ -50,7 +57,12 @@ public static class TextBridge
         try
         {
             var focused = AutomationElement.FocusedElement;
-            if (focused == null || focused.Current.ProcessId == Environment.ProcessId || !IsEditable(focused)) return (SelectionState.NotEditable, null);
+            if (focused == null || focused.Current.ProcessId == Environment.ProcessId) return (SelectionState.NotEditable, null);
+            if (!IsEditable(focused))
+            {
+                DebugLog.Note($"  focused {focused.Current.ControlType.ProgrammaticName} '{focused.Current.ClassName}' is not editable");
+                return (SelectionState.NotEditable, null);
+            }
             if (!focused.TryGetCurrentPattern(TextPattern.Pattern, out var pattern)) return (SelectionState.Unknown, null);
             var ranges = ((TextPattern)pattern).GetSelection();
             if (ranges.Length == 0) return (SelectionState.Unknown, null);
@@ -72,6 +84,30 @@ public static class TextBridge
         if (element.TryGetCurrentPattern(ValuePattern.Pattern, out var value)) return !((ValuePattern)value).Current.IsReadOnly;
         return element.Current.ControlType == ControlType.Document && element.Current.IsKeyboardFocusable
             && element.Current.ClassName is "_WwG" or "RichEditD2DPT" or "RICHEDIT50W";
+    }
+
+    /// <summary>"kept", "reselected", or why neither (the paste then goes wherever the caret is).</summary>
+    private static string EnsureSelected(string original)
+    {
+        try
+        {
+            var focused = AutomationElement.FocusedElement;
+            if (focused == null) return "no focus";
+            if (!focused.TryGetCurrentPattern(TextPattern.Pattern, out var pattern)) return "unknown (no text pattern)";
+            var text = (TextPattern)pattern;
+            var selected = string.Concat(text.GetSelection().Select(r => r.GetText(-1)));
+            static string Flat(string s) => s.Replace("\r\n", "\n").Replace('\r', '\n');
+            if (Flat(selected) == Flat(original)) return "kept";
+            var found = text.DocumentRange.FindText(original, backward: false, ignoreCase: false)
+                ?? text.DocumentRange.FindText(Flat(original), backward: false, ignoreCase: false);
+            if (found == null) return "lost, original not found";
+            found.Select();
+            return "reselected";
+        }
+        catch (Exception e)
+        {
+            return "unknown (" + e.GetType().Name + ")";
+        }
     }
 
     private static string? AutomationSelectedText()

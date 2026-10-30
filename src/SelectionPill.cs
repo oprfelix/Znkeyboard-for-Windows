@@ -143,7 +143,8 @@ public sealed class SelectionPill : IDisposable
 
     private void OnMouse(bool down, Native.POINT point, uint time)
     {
-        if (window.IsVisible && IsOverPill(point)) return;
+        // Clicks on the pill, its language list or the result card are ours to handle.
+        if (Native.IsOwnWindowAt(point)) return;
         if (down)
         {
             downPoint = point;
@@ -155,7 +156,11 @@ public sealed class SelectionPill : IDisposable
             && Math.Abs(point.X - lastUpPoint.X) + Math.Abs(point.Y - lastUpPoint.Y) <= 4;
         lastUpTime = time;
         lastUpPoint = point;
-        if (dragged || multiClick) Check(point);
+        if (dragged || multiClick)
+        {
+            DebugLog.Note($"mouse {(dragged ? "drag" : "multi-click")} in {Native.Describe(Native.GetForegroundWindow())}");
+            Check(point);
+        }
     }
 
     private static readonly uint[] Modifiers = [0x10, 0x11, 0x12, 0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0x5B, 0x5C];
@@ -170,20 +175,33 @@ public sealed class SelectionPill : IDisposable
         }
         var ctrlA = vk == 0x41 && Native.IsDown(Native.VK_CONTROL) && !Native.IsDown(Native.VK_MENU);
         var shiftExtend = ExtendKeys.Contains(vk) && Native.IsDown(Native.VK_SHIFT);
-        if (ctrlA || shiftExtend) Check(null);
+        if (ctrlA || shiftExtend)
+        {
+            DebugLog.Note($"key {(ctrlA ? "Ctrl+A" : "Shift+move")} in {Native.Describe(Native.GetForegroundWindow())}");
+            Check(null);
+        }
     }
 
     /// <summary>After the app has updated its selection, show the pill if there is one in an editable field.</summary>
     private async void Check(Native.POINT? pointer)
     {
-        if (!Settings.Current.SelectionPill || IsSuspended()) return;
+        if (!Settings.Current.SelectionPill || IsSuspended())
+        {
+            DebugLog.Note("  skipped: " + (IsSuspended() ? "result card open" : "turned off in settings"));
+            return;
+        }
         var foreground = Native.GetForegroundWindow();
         if (foreground == IntPtr.Zero || Native.IsOwnWindow(foreground)) return;
         var generation = ++checkGeneration;
         await Task.Delay(150);
+        var started = DateTime.Now;
         var inspect = Task.Run(TextBridge.InspectFocusedSelection);
-        if (await Task.WhenAny(inspect, Task.Delay(500)) != inspect || generation != checkGeneration) return;
-        var (state, end) = inspect.Result;
+        // UI Automation can be slow the first time, or in big documents. A mouse gesture is trusted
+        // when it can't answer in time; a keyboard one needs the selection's position, so it waits.
+        var answered = await Task.WhenAny(inspect, Task.Delay(1200)) == inspect;
+        if (generation != checkGeneration) return;
+        var (state, end) = answered ? inspect.Result : (TextBridge.SelectionState.Unknown, (Rect?)null);
+        DebugLog.Note($"  selection {state}{(answered ? "" : " (timed out)")} after {(DateTime.Now - started).TotalMilliseconds:F0} ms, position {(end.HasValue ? "known" : "unknown")}");
         // Mouse selections in some apps report no selection at all; trust the gesture there.
         var show = state == TextBridge.SelectionState.Selected || (state == TextBridge.SelectionState.Unknown && pointer != null);
         if (!show || IsSuspended()) return;
@@ -200,14 +218,7 @@ public sealed class SelectionPill : IDisposable
         window.Top = anchor.Y / scale + 2;
         window.Show();
         watch.Start();
-    }
-
-    private bool IsOverPill(Native.POINT point)
-    {
-        var scale = Native.ScaleAt(point);
-        var x = point.X / scale;
-        var y = point.Y / scale;
-        return x >= window.Left && x <= window.Left + window.ActualWidth && y >= window.Top && y <= window.Top + window.ActualHeight;
+        DebugLog.Note($"  pill shown at {anchor.X},{anchor.Y} (scale {scale:F2})");
     }
 
     private void ChooseLanguage()

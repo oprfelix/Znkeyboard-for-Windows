@@ -122,6 +122,7 @@ public sealed class App : Application
         menu.Items.Add(languages);
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add(new Forms.ToolStripMenuItem(L.SettingsMenu, null, (_, _) => ShowSettings()));
+        menu.Items.Add(new Forms.ToolStripMenuItem(L.OpenLog, null, (_, _) => DebugLog.Open()));
         menu.Items.Add(new Forms.ToolStripMenuItem(L.Quit, null, (_, _) => Shutdown()));
     }
 

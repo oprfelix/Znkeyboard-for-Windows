@@ -71,6 +71,30 @@ internal static class Native
     [DllImport("user32.dll")]
     public static extern uint GetDoubleClickTime();
 
+    [DllImport("user32.dll")]
+    public static extern IntPtr WindowFromPoint(POINT point);
+
+    /// <summary>Whether the window under <paramref name="point"/> belongs to this app (the pill, the card, their menus).</summary>
+    public static bool IsOwnWindowAt(POINT point) => IsOwnWindow(WindowFromPoint(point));
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int GetClassName(IntPtr hWnd, System.Text.StringBuilder name, int max);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int GetWindowModuleFileName(IntPtr hWnd, System.Text.StringBuilder name, int max);
+
+    /// <summary>The window class and process of <paramref name="hwnd"/>, for the debug log.</summary>
+    public static string Describe(IntPtr hwnd)
+    {
+        var name = new System.Text.StringBuilder(128);
+        GetClassName(hwnd, name, name.Capacity);
+        GetWindowThreadProcessId(hwnd, out var pid);
+        string process;
+        try { process = System.Diagnostics.Process.GetProcessById((int)pid).ProcessName; }
+        catch (Exception) { process = pid.ToString(); }
+        return $"{process}/{name}";
+    }
+
     [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")]
     public static extern IntPtr GetWindowLongPtr(IntPtr hWnd, int index);
 

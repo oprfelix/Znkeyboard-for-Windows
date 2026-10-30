@@ -45,7 +45,7 @@ public sealed class Controller
             return;
         }
 
-        panel.OnReplace = text => _ = TextBridge.ReplaceSelectionAsync(source, text);
+        panel.OnReplace = text => _ = TextBridge.ReplaceSelectionAsync(source, selection, text);
         // Picking another language in the card translates the same selection again and remembers it.
         panel.OnLanguageChange = language =>
         {

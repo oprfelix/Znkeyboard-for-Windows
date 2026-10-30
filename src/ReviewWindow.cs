@@ -1,8 +1,9 @@
 using System;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
 
@@ -10,7 +11,9 @@ namespace ZnKeyboard;
 
 /// <summary>
 /// The small card near the pointer: working, then the result (Enter replaces, Esc cancels,
-/// Ctrl+C copies) or an error.
+/// Ctrl+C copies) or an error. It never takes focus: the app with the selection keeps it, so the
+/// selection is still there to be replaced. Its keys come from a keyboard hook while it is shown;
+/// a click anywhere else closes it.
 /// </summary>
 public sealed class ReviewWindow : Window
 {
@@ -20,6 +23,8 @@ public sealed class ReviewWindow : Window
     private readonly StackPanel body = new();
     private readonly StackPanel buttons = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 12, 0, 0) };
     private string? result;
+    private Native.HookProc? keyboardProc, mouseProc; // Kept alive while the hooks use them.
+    private IntPtr keyboardHook, mouseHook;
 
     public Action<string> OnReplace { get; set; } = _ => { };
     public Action OnOpenSettings { get; set; } = () => { };
@@ -33,6 +38,7 @@ public sealed class ReviewWindow : Window
         Background = Brushes.Transparent;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
+        ShowActivated = false;
         Topmost = true;
         Width = 460;
         SizeToContent = SizeToContent.Height;
@@ -64,8 +70,67 @@ public sealed class ReviewWindow : Window
         };
         Content = card;
         card.MouseLeftButtonDown += (_, _) => DragMove();
-        PreviewKeyDown += OnKey;
-        Deactivated += (_, _) => { if (result == null && !language.IsDropDownOpen) Hide(); };
+        SourceInitialized += (_, _) =>
+        {
+            var handle = new WindowInteropHelper(this).Handle;
+            var style = Native.GetWindowLongPtr(handle, Native.GWL_EXSTYLE).ToInt64();
+            Native.SetWindowLongPtr(handle, Native.GWL_EXSTYLE, new IntPtr(style | Native.WS_EX_NOACTIVATE | Native.WS_EX_TOOLWINDOW));
+        };
+        IsVisibleChanged += (_, _) => { if (IsVisible) InstallHooks(); else RemoveHooks(); };
+    }
+
+    private void InstallHooks()
+    {
+        if (keyboardHook != IntPtr.Zero) return;
+        keyboardProc = KeyboardHook;
+        mouseProc = MouseHook;
+        var module = Native.GetModuleHandle(null);
+        keyboardHook = Native.SetWindowsHookEx(Native.WH_KEYBOARD_LL, keyboardProc, module, 0);
+        mouseHook = Native.SetWindowsHookEx(Native.WH_MOUSE_LL, mouseProc, module, 0);
+    }
+
+    private void RemoveHooks()
+    {
+        if (keyboardHook != IntPtr.Zero) Native.UnhookWindowsHookEx(keyboardHook);
+        if (mouseHook != IntPtr.Zero) Native.UnhookWindowsHookEx(mouseHook);
+        keyboardHook = mouseHook = IntPtr.Zero;
+    }
+
+    /// <summary>Takes Enter, Esc and Ctrl+C for the card (so they don't reach the app); lets everything else through.</summary>
+    private IntPtr KeyboardHook(int code, IntPtr wParam, IntPtr lParam)
+    {
+        if (code >= 0 && wParam.ToInt32() is Native.WM_KEYDOWN or Native.WM_SYSKEYDOWN)
+        {
+            var vk = Marshal.PtrToStructure<Native.KBDLLHOOKSTRUCT>(lParam).VkCode;
+            var hasResult = result != null;
+            if (vk == 0x1B)
+            {
+                Dispatcher.BeginInvoke(() => { result = null; Hide(); });
+                return new IntPtr(1);
+            }
+            if (vk == 0x0D && hasResult && !language.IsDropDownOpen)
+            {
+                Dispatcher.BeginInvoke(Replace);
+                return new IntPtr(1);
+            }
+            if (vk == 0x43 && hasResult && Native.IsDown(Native.VK_CONTROL) && !Native.IsDown(Native.VK_MENU))
+            {
+                Dispatcher.BeginInvoke(CopyResult);
+                return new IntPtr(1);
+            }
+        }
+        return Native.CallNextHookEx(keyboardHook, code, wParam, lParam);
+    }
+
+    /// <summary>A click outside the card (and its language list) closes it; clicking into the text would move the selection anyway.</summary>
+    private IntPtr MouseHook(int code, IntPtr wParam, IntPtr lParam)
+    {
+        if (code >= 0 && wParam.ToInt32() is Native.WM_LBUTTONDOWN or 0x204 /* WM_RBUTTONDOWN */)
+        {
+            var point = Marshal.PtrToStructure<Native.MSLLHOOKSTRUCT>(lParam).Point;
+            if (!Native.IsOwnWindowAt(point)) Dispatcher.BeginInvoke(() => { result = null; Hide(); });
+        }
+        return Native.CallNextHookEx(mouseHook, code, wParam, lParam);
     }
 
     /// <summary>[target] shows "AI 翻译为 [language ▾]" instead of a plain title.</summary>
@@ -86,7 +151,6 @@ public sealed class ReviewWindow : Window
             PlaceAtCursor();
             Show();
         }
-        Activate();
     }
 
     public void ShowResult(string text)
@@ -107,7 +171,6 @@ public sealed class ReviewWindow : Window
             },
         });
         SetButtons((L.Copy, CopyResult, false), (L.Cancel, Hide, false), (L.Replace + "  ↵", Replace, true));
-        Activate();
     }
 
     public void ShowError(string message, bool offerSettings)
@@ -122,7 +185,6 @@ public sealed class ReviewWindow : Window
             PlaceAtCursor();
             Show();
         }
-        Activate();
     }
 
     private void Replace()
@@ -138,13 +200,6 @@ public sealed class ReviewWindow : Window
         if (result is { } text) TextBridge.TrySetClipboard(() => Clipboard.SetText(text));
         result = null;
         Hide();
-    }
-
-    private void OnKey(object sender, KeyEventArgs e)
-    {
-        if (e.Key == Key.Escape) { result = null; Hide(); e.Handled = true; }
-        else if (e.Key == Key.Enter && result != null && !language.IsDropDownOpen) { Replace(); e.Handled = true; }
-        else if (e.Key == Key.C && Keyboard.Modifiers == ModifierKeys.Control && result != null) { CopyResult(); e.Handled = true; }
     }
 
     private void SetButtons(params (string label, Action action, bool primary)[] items)

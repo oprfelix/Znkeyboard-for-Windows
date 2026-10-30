@@ -22,6 +22,7 @@ public static class L
     public static string TranslateShort => T("AI 翻译为", "Translate to");
     public static string SettingsMenu => T("设置…", "Settings…");
     public static string Quit => T("退出 ZnKeyboard", "Quit ZnKeyboard");
+    public static string OpenLog => T("打开诊断日志", "Open Diagnostic Log");
 
     // Review panel
     public static string Working => T("处理中…", "Working…");
