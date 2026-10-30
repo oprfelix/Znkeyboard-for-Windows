@@ -54,6 +54,8 @@ public sealed class Settings
     public string TranslateTarget { get; set; } = "EN";
     /// <summary>"system", "zh" or "en".</summary>
     public string UiLanguage { get; set; } = "system";
+    /// <summary>The 润色 | AI 翻译为 pill on selected text. On by default.</summary>
+    public bool SelectionPill { get; set; } = true;
     public Shortcut? PolishShortcut { get; set; }
     public Shortcut? TranslateShortcut { get; set; }
 

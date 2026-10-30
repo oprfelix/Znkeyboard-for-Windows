@@ -12,6 +12,8 @@ public sealed class Controller
 
     public Action OpenSettings { get; set; } = () => { };
 
+    public bool IsPanelVisible => panel.IsVisible;
+
     public Controller()
     {
         panel.OnOpenSettings = () => OpenSettings();
@@ -22,7 +24,6 @@ public sealed class Controller
         running?.Cancel();
         var cancel = new CancellationTokenSource();
         running = cancel;
-        var heading = mode.Target is { } target ? L.TranslateTo(target) : L.Polish;
 
         // The window whose text is selected; the paste must land there.
         var source = Native.GetForegroundWindow();
@@ -45,7 +46,22 @@ public sealed class Controller
         }
 
         panel.OnReplace = text => _ = TextBridge.ReplaceSelectionAsync(source, text);
-        panel.ShowLoading(heading);
+        // Picking another language in the card translates the same selection again and remembers it.
+        panel.OnLanguageChange = language =>
+        {
+            Settings.Current.TranslateTarget = language.Code;
+            Settings.Current.Save();
+            Process(selection, RewriteMode.Translate(language), client);
+        };
+        Process(selection, mode, client);
+    }
+
+    private async void Process(string selection, RewriteMode mode, AIClient client)
+    {
+        running?.Cancel();
+        var cancel = new CancellationTokenSource();
+        running = cancel;
+        panel.ShowLoading(L.Polish, mode.Target);
         var (leading, core, trailing) = SplitWhitespace(selection);
         try
         {

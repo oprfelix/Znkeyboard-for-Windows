@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -13,13 +14,17 @@ namespace ZnKeyboard;
 /// </summary>
 public sealed class ReviewWindow : Window
 {
-    private readonly TextBlock title = new() { FontSize = 14, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 10) };
+    private readonly TextBlock title = new() { FontSize = 14, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
+    private readonly ComboBox language = new() { Margin = new Thickness(8, 0, 0, 0), MinWidth = 150, VerticalAlignment = VerticalAlignment.Center };
+    private bool updatingLanguage;
     private readonly StackPanel body = new();
     private readonly StackPanel buttons = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 12, 0, 0) };
     private string? result;
 
     public Action<string> OnReplace { get; set; } = _ => { };
     public Action OnOpenSettings { get; set; } = () => { };
+    /// <summary>The user picked another target language in the header; translate again.</summary>
+    public Action<TranslateLanguage> OnLanguageChange { get; set; } = _ => { };
 
     public ReviewWindow()
     {
@@ -43,23 +48,44 @@ public sealed class ReviewWindow : Window
             Padding = new Thickness(18, 14, 18, 14),
             Margin = new Thickness(14),
             Effect = new DropShadowEffect { BlurRadius = 18, ShadowDepth = 3, Opacity = 0.22 },
-            Child = new StackPanel { Children = { title, body, buttons } },
+            Child = new StackPanel
+            {
+                Children =
+                {
+                    new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 10), Children = { title, language } },
+                    body,
+                    buttons,
+                },
+            },
+        };
+        language.SelectionChanged += (_, _) =>
+        {
+            if (!updatingLanguage && language.SelectedIndex >= 0) OnLanguageChange(Languages.All[language.SelectedIndex]);
         };
         Content = card;
         card.MouseLeftButtonDown += (_, _) => DragMove();
         PreviewKeyDown += OnKey;
-        Deactivated += (_, _) => { if (result == null) Hide(); };
+        Deactivated += (_, _) => { if (result == null && !language.IsDropDownOpen) Hide(); };
     }
 
-    public void ShowLoading(string heading)
+    /// <summary>[target] shows "AI 翻译为 [language ▾]" instead of a plain title.</summary>
+    public void ShowLoading(string heading, TranslateLanguage? target = null)
     {
         result = null;
-        title.Text = heading;
+        title.Text = target == null ? heading : L.TranslateShort;
+        updatingLanguage = true;
+        language.Visibility = target == null ? Visibility.Collapsed : Visibility.Visible;
+        language.ItemsSource = Languages.All.Select(l => l.Label).ToList();
+        if (target != null) language.SelectedIndex = Languages.All.ToList().FindIndex(l => l.Code == target.Code);
+        updatingLanguage = false;
         body.Children.Clear();
         body.Children.Add(new TextBlock { Text = L.Working, Foreground = Brushes.Gray });
         SetButtons((L.Cancel, Hide, false));
-        PlaceAtCursor();
-        Show();
+        if (!IsVisible)
+        {
+            PlaceAtCursor();
+            Show();
+        }
         Activate();
     }
 
@@ -117,7 +143,7 @@ public sealed class ReviewWindow : Window
     private void OnKey(object sender, KeyEventArgs e)
     {
         if (e.Key == Key.Escape) { result = null; Hide(); e.Handled = true; }
-        else if (e.Key == Key.Enter && result != null) { Replace(); e.Handled = true; }
+        else if (e.Key == Key.Enter && result != null && !language.IsDropDownOpen) { Replace(); e.Handled = true; }
         else if (e.Key == Key.C && Keyboard.Modifiers == ModifierKeys.Control && result != null) { CopyResult(); e.Handled = true; }
     }
 

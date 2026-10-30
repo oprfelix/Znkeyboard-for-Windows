@@ -38,6 +38,42 @@ public static class TextBridge
         saved.Restore();
     }
 
+    public enum SelectionState { NotEditable, Empty, Selected, Unknown }
+
+    /// <summary>
+    /// Whether the focused element in another app is an editable text box with a selection, and
+    /// where the selection ends on screen (device pixels) when the app reports it. Blocking; call
+    /// off the UI thread.
+    /// </summary>
+    public static (SelectionState state, Rect? end) InspectFocusedSelection()
+    {
+        try
+        {
+            var focused = AutomationElement.FocusedElement;
+            if (focused == null || focused.Current.ProcessId == Environment.ProcessId || !IsEditable(focused)) return (SelectionState.NotEditable, null);
+            if (!focused.TryGetCurrentPattern(TextPattern.Pattern, out var pattern)) return (SelectionState.Unknown, null);
+            var ranges = ((TextPattern)pattern).GetSelection();
+            if (ranges.Length == 0) return (SelectionState.Unknown, null);
+            var text = string.Concat(ranges.Select(r => r.GetText(200)));
+            if (text.Length == 0) return (SelectionState.Empty, null);
+            var rects = ranges[^1].GetBoundingRectangles();
+            return (SelectionState.Selected, rects.Length > 0 ? rects[^1] : null);
+        }
+        catch (Exception)
+        {
+            return (SelectionState.Unknown, null);
+        }
+    }
+
+    /// <summary>Text inputs, and documents or other elements whose value can be edited (Word, rich editors).</summary>
+    private static bool IsEditable(AutomationElement element)
+    {
+        if (element.Current.ControlType == ControlType.Edit) return true;
+        if (element.TryGetCurrentPattern(ValuePattern.Pattern, out var value)) return !((ValuePattern)value).Current.IsReadOnly;
+        return element.Current.ControlType == ControlType.Document && element.Current.IsKeyboardFocusable
+            && element.Current.ClassName is "_WwG" or "RichEditD2DPT" or "RICHEDIT50W";
+    }
+
     private static string? AutomationSelectedText()
     {
         try

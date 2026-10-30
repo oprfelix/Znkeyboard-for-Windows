@@ -15,6 +15,7 @@ public sealed class App : Application
     private readonly Controller controller = new();
     private HotKeys? hotKeys;
     private Forms.NotifyIcon? tray;
+    private SelectionPill? pill;
     private SettingsWindow? settingsWindow;
 
     [STAThread]
@@ -35,6 +36,13 @@ public sealed class App : Application
         foreach (var action in new[] { ShortcutAction.Polish, ShortcutAction.Translate })
             RegisterHotKey(action, Settings.Current.ShortcutFor(action));
 
+        pill = new SelectionPill
+        {
+            IsSuspended = () => controller.IsPanelVisible,
+            OnPolish = () => controller.Run(RewriteMode.Polish),
+            OnTranslate = () => controller.Run(RewriteMode.Translate(Settings.Current.Target)),
+        };
+
         tray = new Forms.NotifyIcon
         {
             Icon = TrayIcon(),
@@ -52,6 +60,7 @@ public sealed class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         hotKeys?.Dispose();
+        pill?.Dispose();
         if (tray != null) tray.Visible = false;
         tray?.Dispose();
         base.OnExit(e);

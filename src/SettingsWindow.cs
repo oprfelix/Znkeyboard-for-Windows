@@ -118,6 +118,10 @@ public sealed class SettingsWindow : Window
             settings.Save();
         };
         usage.Children.Add(Row(L.TranslateMenu, target));
+        var pill = new CheckBox { Content = L.SelectionPill, IsChecked = settings.SelectionPill, Margin = new Thickness(0, 4, 0, 2) };
+        pill.Click += (_, _) => { settings.SelectionPill = pill.IsChecked == true; settings.Save(); };
+        usage.Children.Add(Indented(pill));
+        usage.Children.Add(Indented(new TextBlock { Text = L.SelectionPillNote, Foreground = Muted, FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 10) }));
         usage.Children.Add(Row(L.PolishShortcut, Recorder(ShortcutAction.Polish)));
         usage.Children.Add(Row(L.TranslateShortcut, Recorder(ShortcutAction.Translate)));
         usage.Children.Add(Note(L.ShortcutsNote));

@@ -19,6 +19,7 @@ public static class L
     public static string PolishSelection => T("润色所选文字", "Polish Selected Text");
     public static string TranslateTo(TranslateLanguage language) => T($"AI 翻译为 {language.DisplayName}", $"Translate to {language.DisplayName}");
     public static string TranslateMenu => T("翻译成", "Translate To");
+    public static string TranslateShort => T("AI 翻译为", "Translate to");
     public static string SettingsMenu => T("设置…", "Settings…");
     public static string Quit => T("退出 ZnKeyboard", "Quit ZnKeyboard");
 
@@ -59,6 +60,9 @@ public static class L
         "When you polish or translate, the selected text is sent to the selected provider. Each provider keeps its own key.");
 
     public static string UsageSection => T("使用", "Usage");
+    public static string SelectionPill => T("选中文字后显示按钮", "Show buttons on selected text");
+    public static string SelectionPillNote => T("在输入框里选中文字（鼠标拖选、双击，或 Ctrl+A）后，旁边出现「润色」和「AI 翻译为」。",
+        "Select text in a text box (drag, double-click or Ctrl+A) and Polish and Translate appear beside it.");
     public static string PolishShortcut => T("润色快捷键", "Polish shortcut");
     public static string TranslateShortcut => T("AI 翻译快捷键", "Translate shortcut");
     public static string ShortcutsNote => T("在任意程序里选中文字后按快捷键，确认后替换原文。点击快捷键可以改成你习惯的组合，Esc 取消。",
