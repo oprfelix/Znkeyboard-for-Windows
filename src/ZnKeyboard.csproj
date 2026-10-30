@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Tray app for Windows 10/11 x64. Framework-dependent: colleagues install the .NET 10 Desktop Runtime once.
+       Builds on macOS too (EnableWindowsTargeting); it only runs on Windows. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>false</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>ZnKeyboard</AssemblyName>
+    <RootNamespace>ZnKeyboard</RootNamespace>
+    <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Version>0.1.0</Version>
+    <Product>ZnKeyboard for Windows</Product>
+    <Copyright>GPL-3.0</Copyright>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <!-- DPI awareness comes from app.manifest, which WPF needs; the WinForms tray icon follows it. -->
+    <NoWarn>$(NoWarn);WFO0003</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Assets\prompts\*.md" LogicalName="prompts.%(Filename).md" />
+    <EmbeddedResource Include="Assets\AppIcon.ico" LogicalName="AppIcon.ico" />
+  </ItemGroup>
+</Project>
