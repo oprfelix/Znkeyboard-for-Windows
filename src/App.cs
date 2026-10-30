@@ -147,8 +147,8 @@ public sealed class App : Application
 
     private static Icon TrayIcon()
     {
-        using var stream = typeof(App).Assembly.GetManifestResourceStream("AppIcon.ico")!;
-        // The tray uses the 16/32 px frames of the app icon.
+        // A simplified version of the app icon that stays legible at 16-32 px.
+        using var stream = typeof(App).Assembly.GetManifestResourceStream("TrayIcon.ico")!;
         return new Icon(stream, Forms.SystemInformation.SmallIconSize);
     }
 
