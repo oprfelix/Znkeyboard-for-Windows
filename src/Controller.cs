@@ -30,9 +30,9 @@ public sealed class Controller
         if (Native.IsOwnWindow(source)) source = IntPtr.Zero;
 
         var client = Settings.Current.CreateClient();
-        if (client.ApiKey.Length == 0)
+        if (client.ApiKey.Length == 0 || !client.HasValidEndpoint)
         {
-            panel.ShowError(L.NeedKey, offerSettings: true);
+            panel.ShowError(client.ApiKey.Length == 0 ? L.NeedKey : L.BadEndpoint, offerSettings: true);
             return;
         }
 

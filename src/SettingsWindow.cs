@@ -47,7 +47,7 @@ public sealed class SettingsWindow : Window
 
         // AI service
         var ai = Card(L.AiSection);
-        var provider = new ComboBox { ItemsSource = new[] { "Google Gemini", "DeepSeek" }, SelectedIndex = (int)settings.Provider };
+        var provider = new ComboBox { ItemsSource = new[] { "Google Gemini", L.OpenAICompatible }, SelectedIndex = (int)settings.Provider };
         provider.SelectionChanged += (_, _) =>
         {
             settings.Provider = (Provider)provider.SelectedIndex;
@@ -55,6 +55,28 @@ public sealed class SettingsWindow : Window
             Build();
         };
         ai.Children.Add(Row(L.Provider, provider));
+
+        if (settings.Provider == Provider.OpenAICompatible)
+        {
+            var preset = new ComboBox { ItemsSource = new[] { "DeepSeek", L.CustomPreset }, SelectedIndex = (int)settings.EffectivePreset };
+            preset.SelectionChanged += (_, _) =>
+            {
+                settings.Preset = (ApiPreset)preset.SelectedIndex;
+                // A model typed for another service would not exist on DeepSeek.
+                if (settings.Preset == ApiPreset.DeepSeek && !settings.OpenAIModel.StartsWith("deepseek", StringComparison.OrdinalIgnoreCase))
+                    settings.OpenAIModel = Settings.DefaultOpenAIModel;
+                settings.Save();
+                Dispatcher.BeginInvoke(Build);
+            };
+            ai.Children.Add(Row(L.ApiPreset, preset));
+        }
+
+        if (settings.Provider == Provider.OpenAICompatible && settings.EffectivePreset == ApiPreset.Custom)
+        {
+            var baseUrl = new TextBox { Text = settings.OpenAIBaseUrl, Padding = new Thickness(4, 3, 4, 3) };
+            baseUrl.LostFocus += (_, _) => { settings.OpenAIBaseUrl = baseUrl.Text.Trim(); settings.Save(); LoadModels(); };
+            ai.Children.Add(Row(L.ApiBaseUrl, baseUrl));
+        }
 
         var key = new PasswordBox { Password = Credentials.Read(settings.Provider) ?? "", Padding = new Thickness(4, 3, 4, 3) };
         var save = new Button { Content = L.Save, Padding = new Thickness(14, 3, 14, 3), Margin = new Thickness(8, 0, 0, 0) };
@@ -66,13 +88,9 @@ public sealed class SettingsWindow : Window
             {
                 keyStatus.Inlines.Add(new Run(L.KeyStored) { Foreground = new SolidColorBrush(Color.FromRgb(0x2E, 0x7D, 0x32)) });
             }
-            else
+            else if (settings.Provider == Provider.Gemini)
             {
-                var gemini = settings.Provider == Provider.Gemini;
-                var link = new Hyperlink(new Run(gemini ? L.NoKeyYet : L.NoDeepSeekKeyYet))
-                {
-                    NavigateUri = new Uri(gemini ? "https://aistudio.google.com/apikey" : "https://platform.deepseek.com/api_keys"),
-                };
+                var link = new Hyperlink(new Run(L.NoKeyYet)) { NavigateUri = new Uri("https://aistudio.google.com/apikey") };
                 link.RequestNavigate += (_, e) => Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true });
                 keyStatus.Inlines.Add(link);
             }
@@ -93,22 +111,15 @@ public sealed class SettingsWindow : Window
         ShowKeyStatus();
         ai.Children.Add(Indented(keyStatus));
 
-        if (settings.Provider == Provider.Gemini)
-        {
-            var model = new ComboBox();
-            modelBox = model;
-            FillModels(Array.Empty<string>());
-            model.SelectionChanged += (_, _) => { if (model.SelectedItem is string id) SaveModel(id); };
-            ai.Children.Add(Row(L.Model, model));
-            LoadModels();
-        }
-        else
-        {
-            // DeepSeek always uses deepseek-flash.
-            modelBox = null;
-            ai.Children.Add(Row(L.Model, new TextBlock { Text = Settings.DeepSeekModel, VerticalAlignment = VerticalAlignment.Center }));
-        }
-        ai.Children.Add(Note((settings.Provider == Provider.Gemini ? L.GeminiNote : L.DeepSeekNote) + " " + L.PrivacyNote));
+        var model = new ComboBox { IsEditable = settings.Provider == Provider.OpenAICompatible };
+        modelBox = model;
+        FillModels(Array.Empty<string>());
+        model.SelectionChanged += (_, _) => { if (model.SelectedItem is string id) SaveModel(id); };
+        model.LostFocus += (_, _) => { if (model.IsEditable) SaveModel(model.Text); };
+        ai.Children.Add(Row(L.Model, model));
+        var note = settings.Provider == Provider.Gemini ? L.GeminiNote : settings.EffectivePreset == ApiPreset.DeepSeek ? L.DeepSeekNote : L.OpenAINote;
+        ai.Children.Add(Note(note + " " + L.PrivacyNote));
+        LoadModels();
 
         // Usage
         var usage = Card(L.UsageSection);
@@ -158,8 +169,8 @@ public sealed class SettingsWindow : Window
     private void SaveModel(string id)
     {
         var settings = Settings.Current;
-        if (string.IsNullOrWhiteSpace(id) || settings.Provider != Provider.Gemini) return;
-        settings.GeminiModel = id;
+        if (string.IsNullOrWhiteSpace(id)) return;
+        if (settings.Provider == Provider.Gemini) settings.GeminiModel = id; else settings.OpenAIModel = id.Trim();
         settings.Save();
     }
 
@@ -170,10 +181,11 @@ public sealed class SettingsWindow : Window
         var settings = Settings.Current;
         var current = settings.ModelFor(settings.Provider);
         var options = loaded.ToList();
-        if (!options.Contains(Settings.DefaultGeminiModel)) options.Insert(0, Settings.DefaultGeminiModel);
+        if (settings.Provider == Provider.Gemini && !options.Contains(Settings.DefaultGeminiModel)) options.Insert(0, Settings.DefaultGeminiModel);
         if (!options.Contains(current)) options.Add(current);
         modelBox.ItemsSource = options;
         modelBox.SelectedItem = current;
+        if (modelBox.IsEditable) modelBox.Text = current;
     }
 
     private async void LoadModels()

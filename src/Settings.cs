@@ -9,8 +9,10 @@ using Microsoft.Win32;
 
 namespace ZnKeyboard;
 
-/// <summary>Stored as a number: 1 was "OpenAI compatible" before 0.3.0 (see Settings.Migrate).</summary>
-public enum Provider { Gemini, DeepSeek }
+public enum Provider { Gemini, OpenAICompatible }
+
+/// <summary>Endpoints the OpenAI-compatible provider offers without typing an address.</summary>
+public enum ApiPreset { DeepSeek, Custom }
 
 public enum ShortcutAction { Polish, Translate }
 
@@ -46,13 +48,19 @@ public sealed record Shortcut(int Modifiers, int Key, string KeyName)
 public sealed class Settings
 {
     public const string DefaultGeminiModel = "gemini-3.5-flash-lite";
-    public const string DeepSeekModel = "deepseek-flash";
+    public const string DeepSeekBaseUrl = "https://api.deepseek.com";
+    // The custom preset starts from DeepSeek's address too, so 0.3.x settings without one still work.
+    public const string DefaultOpenAIBaseUrl = DeepSeekBaseUrl;
+    public const string DefaultOpenAIModel = "deepseek-flash";
 
     public Provider Provider { get; set; } = Provider.Gemini;
+    /// <summary>Unset before presets: then DeepSeek's address (the default) means DeepSeek, anything else custom.</summary>
+    [JsonConverter(typeof(JsonStringEnumConverter<ApiPreset>))]
+    public ApiPreset? Preset { get; set; }
+    /// <summary>The typed address, used by the custom preset.</summary>
+    public string OpenAIBaseUrl { get; set; } = DefaultOpenAIBaseUrl;
     public string GeminiModel { get; set; } = DefaultGeminiModel;
-    /// <summary>Read only to migrate a 0.2 "OpenAI compatible" setup; never written back.</summary>
-    [JsonPropertyName("OpenAIBaseUrl"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public string? LegacyOpenAIBaseUrl { get; set; }
+    public string OpenAIModel { get; set; } = DefaultOpenAIModel;
     public string TranslateTarget { get; set; } = "EN";
     /// <summary>"system", "zh" or "en".</summary>
     public string UiLanguage { get; set; } = "system";
@@ -68,30 +76,19 @@ public sealed class Settings
 
     private static Settings Load()
     {
+        // 0.3.0–0.3.1 stored the OpenAI-compatible provider's number (1) for a fixed DeepSeek
+        // provider with no address or model, so those load as DeepSeek through the defaults; only
+        // the key needs to move back.
+        Credentials.MoveDeepSeekKey();
         try
         {
-            if (File.Exists(FilePath)) return Migrate(JsonSerializer.Deserialize<Settings>(File.ReadAllText(FilePath)) ?? new Settings());
+            if (File.Exists(FilePath)) return JsonSerializer.Deserialize<Settings>(File.ReadAllText(FilePath)) ?? new Settings();
         }
         catch (Exception)
         {
             // A damaged file falls back to defaults rather than keeping the app from starting.
         }
         return new Settings();
-    }
-
-    /// <summary>
-    /// 0.2 offered a free-form OpenAI-compatible provider (stored as 1, now DeepSeek). One pointed at
-    /// DeepSeek keeps its key; any other falls back to Gemini.
-    /// </summary>
-    private static Settings Migrate(Settings settings)
-    {
-        if (settings.LegacyOpenAIBaseUrl == null) return settings;
-        if (settings.Provider == Provider.DeepSeek && !settings.LegacyOpenAIBaseUrl.Contains("api.deepseek.com"))
-            settings.Provider = Provider.Gemini;
-        Credentials.MoveLegacyKey(settings.Provider == Provider.DeepSeek);
-        settings.LegacyOpenAIBaseUrl = null;
-        settings.Save();
-        return settings;
     }
 
     public void Save()
@@ -102,10 +99,10 @@ public sealed class Settings
 
     public TranslateLanguage Target => Languages.ByCode(TranslateTarget);
 
-    /// <summary>The model for <paramref name="provider"/>. Gemini falls back to the default unless a Lite model is saved; DeepSeek is fixed.</summary>
+    /// <summary>The model for <paramref name="provider"/>. Gemini falls back to the default unless a Lite model is saved.</summary>
     public string ModelFor(Provider provider) => provider == Provider.Gemini
         ? (GeminiModels.IsLite(GeminiModel) ? GeminiModel : DefaultGeminiModel)
-        : DeepSeekModel;
+        : (string.IsNullOrWhiteSpace(OpenAIModel) ? DefaultOpenAIModel : OpenAIModel.Trim());
 
     public Shortcut ShortcutFor(ShortcutAction action) =>
         (action == ShortcutAction.Polish ? PolishShortcut : TranslateShortcut) ?? Shortcut.Default(action);
@@ -116,8 +113,14 @@ public sealed class Settings
         Save();
     }
 
-    /// <summary>The client for the selected provider and its key and model.</summary>
-    public AIClient CreateClient() => new(Provider, Credentials.Read(Provider) ?? "", ModelFor(Provider));
+    /// <summary>The client for the selected provider and its key, model and endpoint.</summary>
+    public AIClient CreateClient() => new(Provider, CompatibleBaseUrl, Credentials.Read(Provider) ?? "", ModelFor(Provider));
+
+    public ApiPreset EffectivePreset => Preset
+        ?? (string.IsNullOrWhiteSpace(OpenAIBaseUrl) || OpenAIBaseUrl.Contains("api.deepseek.com") ? ApiPreset.DeepSeek : ApiPreset.Custom);
+
+    /// <summary>The address the OpenAI-compatible provider calls: the preset's, or the typed one.</summary>
+    public string CompatibleBaseUrl => EffectivePreset == ApiPreset.DeepSeek ? DeepSeekBaseUrl : OpenAIBaseUrl;
 
     // Start with Windows, through the current user's Run key (no admin rights needed).
     private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
@@ -176,20 +179,20 @@ public static class GeminiModels
 /// <summary>API keys in Windows Credential Manager (encrypted for the signed-in user).</summary>
 public static class Credentials
 {
-    private const string LegacyOpenAITarget = "ZnKeyboard/openai-api-key";
+    private const string LegacyDeepSeekTarget = "ZnKeyboard/deepseek-api-key";
 
     private static string Target(Provider provider) =>
-        provider == Provider.Gemini ? "ZnKeyboard/gemini-api-key" : "ZnKeyboard/deepseek-api-key";
+        provider == Provider.Gemini ? "ZnKeyboard/gemini-api-key" : "ZnKeyboard/openai-api-key";
 
     public static string? Read(Provider provider) => ReadTarget(Target(provider));
 
-    /// <summary>Moves a 0.2 OpenAI-compatible key to DeepSeek (when <paramref name="toDeepSeek"/>), then removes it.</summary>
-    public static void MoveLegacyKey(bool toDeepSeek)
+    /// <summary>Moves a 0.3.0–0.3.1 DeepSeek key to the OpenAI-compatible provider, then removes it.</summary>
+    public static void MoveDeepSeekKey()
     {
-        var key = ReadTarget(LegacyOpenAITarget);
+        var key = ReadTarget(LegacyDeepSeekTarget);
         if (key == null) return;
-        if (toDeepSeek && string.IsNullOrEmpty(Read(Provider.DeepSeek))) Write(Provider.DeepSeek, key);
-        CredDelete(LegacyOpenAITarget, CredTypeGeneric, 0);
+        if (string.IsNullOrEmpty(Read(Provider.OpenAICompatible))) Write(Provider.OpenAICompatible, key);
+        CredDelete(LegacyDeepSeekTarget, CredTypeGeneric, 0);
     }
 
     private static string? ReadTarget(string target)
