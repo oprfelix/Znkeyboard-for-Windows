@@ -165,15 +165,20 @@ public sealed class SelectionPill : IDisposable
             Hide();
             return;
         }
-        var dragged = Math.Abs(point.X - downPoint.X) + Math.Abs(point.Y - downPoint.Y) >= 6;
+        // Hook points are physical pixels; measure in DIPs so a click that wobbles a few pixels on a
+        // high-DPI screen or a touchpad isn't taken for a drag.
+        var scale = Native.ScaleAt(point);
+        var moved = Math.Max(Math.Abs(point.X - downPoint.X), Math.Abs(point.Y - downPoint.Y)) / scale;
+        var dragged = moved >= DragDistance;
         var multiClick = time - lastUpTime <= Native.GetDoubleClickTime()
-            && Math.Abs(point.X - lastUpPoint.X) + Math.Abs(point.Y - lastUpPoint.Y) <= 4;
+            && Math.Max(Math.Abs(point.X - lastUpPoint.X), Math.Abs(point.Y - lastUpPoint.Y)) / scale <= 4;
         lastUpTime = time;
         lastUpPoint = point;
         if (dragged || multiClick)
         {
-            DebugLog.Note($"mouse {(dragged ? "drag" : "multi-click")} in {Native.Describe(Native.GetForegroundWindow())}");
-            Check(point);
+            DebugLog.Note($"mouse {(dragged ? $"drag {moved:F0} dip" : "multi-click")} in {Native.Describe(Native.GetForegroundWindow())}");
+            // Where the app can't say whether text is selected, only a gesture that clearly selects counts.
+            Check(point, trustGesture: multiClick || moved >= SureDragDistance);
         }
     }
 
@@ -196,8 +201,16 @@ public sealed class SelectionPill : IDisposable
         }
     }
 
-    /// <summary>After the app has updated its selection, show the pill if there is one in an editable field.</summary>
-    private async void Check(Native.POINT? pointer)
+    /// <summary>Movement (in DIPs) between button down and up that makes a click a drag.</summary>
+    private const double DragDistance = 12;
+    /// <summary>A drag this long selects text even where the app doesn't report the selection.</summary>
+    private const double SureDragDistance = 40;
+
+    /// <summary>
+    /// After the app has updated its selection, show the pill if there is one in an editable field.
+    /// [trustGesture]: show it at the pointer even when the app can't report a selection.
+    /// </summary>
+    private async void Check(Native.POINT? pointer, bool trustGesture = false)
     {
         if (!Settings.Current.SelectionPill || IsSuspended())
         {
@@ -217,7 +230,7 @@ public sealed class SelectionPill : IDisposable
         var (state, end) = answered ? inspect.Result : (TextBridge.SelectionState.Unknown, (Rect?)null);
         DebugLog.Note($"  selection {state}{(answered ? "" : " (timed out)")} after {(DateTime.Now - started).TotalMilliseconds:F0} ms, position {(end.HasValue ? "known" : "unknown")}");
         // Mouse selections in some apps report no selection at all; trust the gesture there.
-        var show = state == TextBridge.SelectionState.Selected || (state == TextBridge.SelectionState.Unknown && pointer != null);
+        var show = state == TextBridge.SelectionState.Selected || (state == TextBridge.SelectionState.Unknown && pointer != null && trustGesture);
         if (!show || IsSuspended()) return;
 
         Native.POINT anchor;

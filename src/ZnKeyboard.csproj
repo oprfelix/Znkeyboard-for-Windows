@@ -18,7 +18,7 @@
     <RootNamespace>ZnKeyboard</RootNamespace>
     <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>0.4.0</Version>
+    <Version>0.4.1</Version>
     <Product>ZnKeyboard for Windows</Product>
     <Copyright>GPL-3.0</Copyright>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
