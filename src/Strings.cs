@@ -53,9 +53,12 @@ public static class L
     public static string OpenAICompatible => T("OpenAI 兼容", "OpenAI compatible");
     public static string ApiBaseUrl => T("API 地址", "API address");
     public static string ApiKey => T("API Key", "API key");
-    public static string Save => T("保存", "Save");
-    public static string KeyStored => T("✓ 已保存在 Windows 凭据管理器", "✓ Saved in Windows Credential Manager");
     public static string NoKeyYet => T("还没有 Key？在 Google AI Studio 免费获取 ↗", "No key yet? Get one free in Google AI Studio ↗");
+    public static string NoDeepSeekKeyYet => T("还没有 Key？在 DeepSeek 开放平台获取 ↗", "No key yet? Get one on the DeepSeek platform ↗");
+    public static string KeyChecking => T("正在验证 API Key…", "Checking the API key…");
+    public static string KeyWorks => T("API Key 可用，已保存在 Windows 凭据管理器", "API key works · saved in Windows Credential Manager");
+    public static string KeyInvalid => T("API Key 无效或没有权限，请检查是否复制完整、是否已过期。", "This API key was rejected. Check it was copied in full and is still active.");
+    public static string KeyUnverified(string reason) => T($"暂时无法验证 API Key：{reason}", $"Couldn't check the API key: {reason}");
     public static string Model => T("模型", "Model");
     public static string Recommended => T("推荐", "recommended");
     public static string GeminiNote => T("仅提供 Flash-Lite 模型，速度快、费用低。", "Flash-Lite models only: fast and low cost.");

@@ -19,6 +19,9 @@ public sealed class SettingsWindow : Window
     private readonly App app;
     private readonly StackPanel root = new() { Margin = new Thickness(20, 16, 20, 20) };
     private CancellationTokenSource? modelLoad;
+    /// <summary>The line under the key: a link to get one, or the result of checking it.</summary>
+    private TextBlock? keyStatus;
+    private readonly System.Windows.Threading.DispatcherTimer keySaveTimer = new() { Interval = TimeSpan.FromMilliseconds(600) };
 
     private static readonly Brush Muted = new SolidColorBrush(Color.FromRgb(0x6B, 0x6F, 0x7A));
     private static readonly Brush Accent = new SolidColorBrush(Color.FromRgb(0x23, 0x40, 0x80));
@@ -26,6 +29,7 @@ public sealed class SettingsWindow : Window
     public SettingsWindow(App app)
     {
         this.app = app;
+        keySaveTimer.Tick += (_, _) => keySaveTick?.Invoke();
         Width = 560;
         SizeToContent = SizeToContent.Height;
         MaxHeight = SystemParameters.WorkArea.Height - 40;
@@ -78,37 +82,22 @@ public sealed class SettingsWindow : Window
             ai.Children.Add(Row(L.ApiBaseUrl, baseUrl));
         }
 
+        // The key saves itself shortly after typing or pasting stops, then gets checked.
         var key = new PasswordBox { Password = Credentials.Read(settings.Provider) ?? "", Padding = new Thickness(4, 3, 4, 3) };
-        var save = new Button { Content = L.Save, Padding = new Thickness(14, 3, 14, 3), Margin = new Thickness(8, 0, 0, 0) };
-        var keyStatus = new TextBlock { FontSize = 12, Margin = new Thickness(0, 0, 0, 10) };
-        void ShowKeyStatus()
-        {
-            keyStatus.Inlines.Clear();
-            if (!string.IsNullOrEmpty(Credentials.Read(settings.Provider)))
-            {
-                keyStatus.Inlines.Add(new Run(L.KeyStored) { Foreground = new SolidColorBrush(Color.FromRgb(0x2E, 0x7D, 0x32)) });
-            }
-            else if (settings.Provider == Provider.Gemini)
-            {
-                var link = new Hyperlink(new Run(L.NoKeyYet)) { NavigateUri = new Uri("https://aistudio.google.com/apikey") };
-                link.RequestNavigate += (_, e) => Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true });
-                keyStatus.Inlines.Add(link);
-            }
-        }
+        keyStatus = new TextBlock { FontSize = 12, Margin = new Thickness(0, 0, 0, 10), TextWrapping = TextWrapping.Wrap };
         void SaveKey()
         {
+            keySaveTimer.Stop();
+            if (key.Password.Trim() == (Credentials.Read(settings.Provider) ?? "")) return;
             Credentials.Write(settings.Provider, key.Password);
-            ShowKeyStatus();
             LoadModels();
         }
-        save.Click += (_, _) => SaveKey();
+        keySaveTimer.Stop();
+        keySaveTick = SaveKey;
+        key.PasswordChanged += (_, _) => { keySaveTimer.Stop(); keySaveTimer.Start(); };
         key.KeyDown += (_, e) => { if (e.Key == Key.Enter) SaveKey(); };
-        var keyRow = new DockPanel();
-        DockPanel.SetDock(save, Dock.Right);
-        keyRow.Children.Add(save);
-        keyRow.Children.Add(key);
-        ai.Children.Add(Row(L.ApiKey, keyRow));
-        ShowKeyStatus();
+        key.LostFocus += (_, _) => SaveKey();
+        ai.Children.Add(Row(L.ApiKey, key));
         ai.Children.Add(Indented(keyStatus));
 
         var model = new ComboBox { IsEditable = settings.Provider == Provider.OpenAICompatible };
@@ -188,19 +177,68 @@ public sealed class SettingsWindow : Window
         if (modelBox.IsEditable) modelBox.Text = current;
     }
 
+    /// <summary>Saves the key field of the current build of the window.</summary>
+    private Action? keySaveTick;
+
+    private static readonly Brush Green = new SolidColorBrush(Color.FromRgb(0x2E, 0x7D, 0x32));
+
+    /// <summary>A coloured dot and a short line under the key.</summary>
+    private void ShowKeyCheck(Brush color, string text)
+    {
+        if (keyStatus == null) return;
+        keyStatus.Inlines.Clear();
+        keyStatus.Inlines.Add(new Run("● ") { Foreground = color });
+        keyStatus.Inlines.Add(new Run(text) { Foreground = color });
+    }
+
+    /// <summary>No key yet: where to get one for the current provider.</summary>
+    private void ShowGetKeyLink()
+    {
+        if (keyStatus == null) return;
+        keyStatus.Inlines.Clear();
+        var settings = Settings.Current;
+        if (settings.Provider == Provider.OpenAICompatible && settings.EffectivePreset == ApiPreset.Custom) return;
+        var gemini = settings.Provider == Provider.Gemini;
+        var link = new Hyperlink(new Run(gemini ? L.NoKeyYet : L.NoDeepSeekKeyYet))
+        {
+            NavigateUri = new Uri(gemini ? "https://aistudio.google.com/apikey" : "https://platform.deepseek.com/api_keys"),
+        };
+        link.RequestNavigate += (_, e) => Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true });
+        keyStatus.Inlines.Add(link);
+    }
+
+    /// <summary>Loads the model list, which also checks the key and reports it under the field.</summary>
     private async void LoadModels()
     {
         modelLoad?.Cancel();
         var cancel = new CancellationTokenSource();
         modelLoad = cancel;
+        var client = Settings.Current.CreateClient();
+        if (client.ApiKey.Length == 0)
+        {
+            ShowGetKeyLink();
+            return;
+        }
+        ShowKeyCheck(Muted, L.KeyChecking);
         try
         {
-            var models = await Settings.Current.CreateClient().ModelsAsync(cancel.Token);
-            if (!cancel.IsCancellationRequested && models.Length > 0) FillModels(models);
+            var result = await client.ListModelsAsync(cancel.Token);
+            if (cancel.IsCancellationRequested) return;
+            if (result.Status is >= 200 and < 300)
+            {
+                ShowKeyCheck(Green, L.KeyWorks);
+                if (result.Models.Length > 0) FillModels(result.Models);
+            }
+            else if (result.Reason?.Contains("location is not supported", StringComparison.OrdinalIgnoreCase) == true)
+                ShowKeyCheck(Brushes.Firebrick, L.RegionUnsupported);
+            else if (result.Status is 400 or 401 or 403)
+                ShowKeyCheck(Brushes.Firebrick, L.KeyInvalid);
+            else
+                ShowKeyCheck(Brushes.Firebrick, L.KeyUnverified(result.Status == 0 ? L.NetworkFailed : result.Reason ?? $"HTTP {result.Status}"));
         }
         catch (Exception)
         {
-            // The list is a convenience; the field keeps the saved model.
+            // Cancelled by a newer check.
         }
     }
 

@@ -66,6 +66,9 @@ public sealed class RewriteException(RewriteFailure failure, int status = 0, str
         || (Failure == RewriteFailure.Http && Status is 400 or 401 or 403 or 404);
 }
 
+/// <summary>A /models answer: the models, the HTTP status (0: unreachable), and the provider's reason when it failed.</summary>
+public sealed record ModelList(string[] Models, int Status, string? Reason);
+
 /// <summary>
 /// Talks to Gemini's OpenAI-compatible endpoint or any other OpenAI-compatible server, with the
 /// same prompts and JSON contract as ZnKeyboard for Android and macOS.
@@ -194,16 +197,24 @@ public sealed class AIClient
     }
 
     /// <summary>Models this key can use: Flash-Lite only for Gemini, everything the server lists otherwise.</summary>
-    public async Task<string[]> ModelsAsync(CancellationToken cancel)
+    /// <remarks>Loading the list is also the settings window's key check: <see cref="ModelList.Status"/> is 0 when the server could not be reached.</remarks>
+    public async Task<ModelList> ListModelsAsync(CancellationToken cancel)
     {
-        if (ApiKey.Length == 0 || baseUrl == null) return [];
+        if (ApiKey.Length == 0 || baseUrl == null) return new([], 0, null);
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{baseUrl}/models");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", ApiKey);
-        using var response = await Http.SendAsync(request, cancel);
-        if (!response.IsSuccessStatusCode) return [];
-        var ids = JsonNode.Parse(await response.Content.ReadAsStringAsync(cancel))?["data"]?.AsArray()
-            .Select(m => (string?)m?["id"]).OfType<string>().ToArray() ?? [];
-        return Provider == Provider.Gemini ? GeminiModels.LiteModels(ids) : ids.Distinct().OrderBy(id => id).ToArray();
+        try
+        {
+            using var response = await Http.SendAsync(request, cancel);
+            var text = await response.Content.ReadAsStringAsync(cancel);
+            var status = (int)response.StatusCode;
+            if (!response.IsSuccessStatusCode) return new([], status, RewriteException.ProviderMessage(text));
+            var ids = JsonNode.Parse(text)?["data"]?.AsArray().Select(m => (string?)m?["id"]).OfType<string>().ToArray() ?? [];
+            return new(Provider == Provider.Gemini ? GeminiModels.LiteModels(ids) : ids.Distinct().OrderBy(id => id).ToArray(), status, null);
+        }
+        catch (HttpRequestException) { return new([], 0, null); }
+        catch (TaskCanceledException) when (!cancel.IsCancellationRequested) { return new([], 0, null); }
+        catch (JsonException) { return new([], 200, null); }
     }
 
     private static bool MentionsSchema(string body)
