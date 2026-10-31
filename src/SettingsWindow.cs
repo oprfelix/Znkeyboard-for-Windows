@@ -104,7 +104,7 @@ public sealed class SettingsWindow : Window
         }
         else
         {
-            // DeepSeek always uses deepseek-chat.
+            // DeepSeek always uses deepseek-flash.
             modelBox = null;
             ai.Children.Add(Row(L.Model, new TextBlock { Text = Settings.DeepSeekModel, VerticalAlignment = VerticalAlignment.Center }));
         }

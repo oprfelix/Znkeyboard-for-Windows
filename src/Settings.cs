@@ -46,7 +46,7 @@ public sealed record Shortcut(int Modifiers, int Key, string KeyName)
 public sealed class Settings
 {
     public const string DefaultGeminiModel = "gemini-3.5-flash-lite";
-    public const string DeepSeekModel = "deepseek-chat";
+    public const string DeepSeekModel = "deepseek-flash";
 
     public Provider Provider { get; set; } = Provider.Gemini;
     public string GeminiModel { get; set; } = DefaultGeminiModel;

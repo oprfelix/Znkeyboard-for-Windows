@@ -52,7 +52,7 @@ public static class L
     public static string Model => T("模型", "Model");
     public static string Recommended => T("推荐", "recommended");
     public static string GeminiNote => T("仅提供 Flash-Lite 模型，速度快、费用低。", "Flash-Lite models only: fast and low cost.");
-    public static string DeepSeekNote => T("国内可直连，固定使用 deepseek-chat 模型。", "Fast in mainland China; always uses the deepseek-chat model.");
+    public static string DeepSeekNote => T("国内可直连，固定使用 deepseek-flash 模型。", "Fast in mainland China; always uses the deepseek-flash model.");
     public static string NoDeepSeekKeyYet => T("还没有 Key？在 DeepSeek 开放平台获取 ↗", "No key yet? Get one on the DeepSeek platform ↗");
     public static string PrivacyNote => T("润色和翻译时，选中的文字会发送给所选的服务商。每个服务商的 Key 分开保存。",
         "When you polish or translate, the selected text is sent to the selected provider. Each provider keeps its own key.");

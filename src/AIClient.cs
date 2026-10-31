@@ -118,6 +118,8 @@ public sealed class AIClient
             ["max_tokens"] = MaxTokens(text),
             ["response_format"] = format,
         };
+        // DeepSeek thinks by default, which only slows a rewrite down.
+        if (Provider == Provider.DeepSeek) body["thinking"] = new JsonObject { ["type"] = "disabled" };
 
         using var request = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}/chat/completions")
         {
