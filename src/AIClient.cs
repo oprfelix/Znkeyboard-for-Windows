@@ -18,7 +18,7 @@ public sealed record RewriteMode(TranslateLanguage? Target)
     public static RewriteMode Translate(TranslateLanguage target) => new(target);
 }
 
-public enum RewriteFailure { MissingKey, BadEndpoint, TooLong, NoChange, Http, BadResponse, Network }
+public enum RewriteFailure { MissingKey, TooLong, NoChange, Http, BadResponse, Network }
 
 public sealed class RewriteException(RewriteFailure failure, int status = 0, string body = "") : Exception(body)
 {
@@ -30,7 +30,6 @@ public sealed class RewriteException(RewriteFailure failure, int status = 0, str
     public string Describe() => Failure switch
     {
         RewriteFailure.MissingKey => L.NeedKey,
-        RewriteFailure.BadEndpoint => L.BadEndpoint,
         RewriteFailure.TooLong => L.TooLong,
         RewriteFailure.NoChange => L.NoChange,
         RewriteFailure.Http when Status is 400 or 401 or 403 => L.KeyRejected,
@@ -39,48 +38,36 @@ public sealed class RewriteException(RewriteFailure failure, int status = 0, str
         _ => L.BadResponse,
     };
 
-    /// <summary>Key, model or endpoint problems are fixed in Settings.</summary>
-    public bool FixableInSettings => Failure is RewriteFailure.MissingKey or RewriteFailure.BadEndpoint
+    /// <summary>Key or model problems are fixed in Settings.</summary>
+    public bool FixableInSettings => Failure == RewriteFailure.MissingKey
         || (Failure == RewriteFailure.Http && Status is 400 or 401 or 403 or 404);
 }
 
 /// <summary>
-/// Talks to Gemini's OpenAI-compatible endpoint or any other OpenAI-compatible server, with the
-/// same prompts and JSON contract as ZnKeyboard for Android and macOS.
+/// Talks to Gemini's or DeepSeek's OpenAI-compatible endpoint, with the same prompts and JSON
+/// contract as ZnKeyboard for Android and macOS.
 /// </summary>
 public sealed class AIClient
 {
     public const int MaxSourceCharacters = 5_000;
-    private const string GeminiBaseUrl = "https://generativelanguage.googleapis.com/v1beta/openai";
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(30) };
 
     public Provider Provider { get; }
     public string ApiKey { get; }
     public string Model { get; }
-    private readonly string? baseUrl;
+    private readonly string baseUrl;
 
-    public AIClient(Provider provider, string openAIBaseUrl, string apiKey, string model)
+    public AIClient(Provider provider, string apiKey, string model)
     {
         Provider = provider;
         ApiKey = apiKey.Trim();
         Model = model;
-        if (provider == Provider.Gemini)
-        {
-            baseUrl = GeminiBaseUrl;
-        }
-        else
-        {
-            var trimmed = (openAIBaseUrl ?? "").Trim().TrimEnd('/');
-            baseUrl = Uri.TryCreate(trimmed, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps ? trimmed : null;
-        }
+        baseUrl = provider == Provider.Gemini ? "https://generativelanguage.googleapis.com/v1beta/openai" : "https://api.deepseek.com";
     }
-
-    public bool HasValidEndpoint => baseUrl != null;
 
     public async Task<string> RewriteAsync(string text, RewriteMode mode, CancellationToken cancel)
     {
         if (ApiKey.Length == 0) throw new RewriteException(RewriteFailure.MissingKey);
-        if (baseUrl == null) throw new RewriteException(RewriteFailure.BadEndpoint);
         if (text.Length > MaxSourceCharacters) throw new RewriteException(RewriteFailure.TooLong);
         try
         {
@@ -88,7 +75,7 @@ public sealed class AIClient
         }
         catch (RewriteException e) when (e.Failure == RewriteFailure.Http && e.Status is 400 or 404 or 422 && MentionsSchema(e.Body))
         {
-            // Some servers (DeepSeek, older OpenAI-compatible ones) only take plain JSON mode.
+            // DeepSeek only takes plain JSON mode.
             return await RequestAsync(text, mode, strictSchema: false, cancel);
         }
     }
@@ -166,10 +153,10 @@ public sealed class AIClient
         catch (JsonException) { throw new RewriteException(RewriteFailure.BadResponse); }
     }
 
-    /// <summary>Models this key can use: Flash-Lite only for Gemini, everything the server lists otherwise.</summary>
+    /// <summary>Models this key can use: Flash-Lite only for Gemini, everything DeepSeek lists.</summary>
     public async Task<string[]> ModelsAsync(CancellationToken cancel)
     {
-        if (ApiKey.Length == 0 || baseUrl == null) return [];
+        if (ApiKey.Length == 0) return [];
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{baseUrl}/models");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", ApiKey);
         using var response = await Http.SendAsync(request, cancel);
