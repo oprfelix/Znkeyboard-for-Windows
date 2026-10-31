@@ -29,10 +29,22 @@ public static class L
     public static string AboutText(string version) => T($"ZnKeyboard for Windows {version}\n选中文字一键润色、翻译，截图翻译。\n\noprfelix.github.io/znkeyboard\nGPL-3.0 开源",
         $"ZnKeyboard for Windows {version}\nPolish or translate selected text, and translate screenshots.\n\noprfelix.github.io/znkeyboard\nOpen source under GPL-3.0");
     public static string UpdateAvailable(string version) => T($"有新版本 {version}", $"ZnKeyboard {version} is available");
-    public static string UpdateAvailableNote(string current) => T($"你正在使用 {current}。下载后右键托盘图标「退出」，用新的 ZnKeyboard.exe 替换旧文件即可，设置和 API Key 都会保留。\n\n现在打开下载页吗？",
-        $"You have {current}. Download it, quit ZnKeyboard from the tray, and replace ZnKeyboard.exe; your settings and API key stay.\n\nOpen the download page now?");
+    public static string UpdateAvailableNote(string current) => T($"你正在使用 {current}。下载新版后双击运行，会自动替换旧版本，设置和 API Key 都会保留。\n\n现在打开下载页吗？",
+        $"You have {current}. Download the new version and run it; it replaces this one and keeps your settings and API key.\n\nOpen the download page now?");
     public static string UpToDate(string current) => T($"ZnKeyboard {current} 已是最新版本。", $"ZnKeyboard {current} is up to date.");
     public static string UpdateCheckFailed => T("无法检查更新，请检查网络。\n\n要打开 GitHub 发布页看看吗？", "Couldn't check for updates. Check your connection.\n\nOpen the releases page on GitHub?");
+
+    // Installer
+    public static string InstalledTitle => T("ZnKeyboard 已安装", "ZnKeyboard is installed");
+    public static string InstalledNote => T("可以从开始菜单打开，开机会自动启动。下载的文件可以删除了。", "Open it from the Start menu; it starts with Windows. You can delete the download.");
+    public static string UpdatedTitle(string version) => T($"已更新到 {version}", $"Updated to {version}");
+    public static string UpdatedNote => T("设置和 API Key 都已保留。下载的文件可以删除了。", "Your settings and API key were kept. You can delete the download.");
+    public static string InstallFailed(string reason) => T($"无法安装到本机（{reason}），这次先从当前位置运行。", $"Couldn't install ZnKeyboard ({reason}). It will run from where it is this time.");
+    public static string ShortcutDescription => T("选中文字一键润色、翻译", "Polish or translate selected text");
+    public static string Uninstall => T("卸载", "Uninstall");
+    public static string UninstallHeading => T("要卸载 ZnKeyboard 吗？", "Uninstall ZnKeyboard?");
+    public static string UninstallText => T("会退出 ZnKeyboard，并移除程序、开始菜单快捷方式和开机启动。", "This quits ZnKeyboard and removes the app, its Start menu shortcut and Start with Windows.");
+    public static string UninstallRemoveData => T("同时删除设置和 API Key", "Also delete settings and API keys");
 
     // Review panel
     public static string Working => T("处理中…", "Working…");

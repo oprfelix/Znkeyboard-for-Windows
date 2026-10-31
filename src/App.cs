@@ -20,10 +20,12 @@ public sealed class App : Application
     private Forms.NotifyIcon? tray;
     private SelectionPill? pill;
     private SettingsWindow? settingsWindow;
+    private EventWaitHandle? quitSignal;
 
     [STAThread]
-    public static void Main()
+    public static void Main(string[] args)
     {
+        if (!Installer.Prepare(args)) return;
         // One copy at a time: a second launch would fight over the shortcuts.
         using var mutex = new Mutex(initiallyOwned: true, "ZnKeyboard.SingleInstance", out var first);
         if (!first) return;
@@ -65,6 +67,13 @@ public sealed class App : Application
         tray.ContextMenuStrip.Opening += (_, _) => BuildMenu();
         tray.DoubleClick += (_, _) => ShowSettings();
         RefreshTray();
+
+        // A newer download installing over this copy asks it to step aside.
+        quitSignal = new EventWaitHandle(false, EventResetMode.AutoReset, Installer.QuitEventName);
+        ThreadPool.RegisterWaitForSingleObject(quitSignal, (_, _) => Dispatcher.BeginInvoke(() => Shutdown()), null, Timeout.Infinite, executeOnlyOnce: true);
+
+        if (e.Args.Contains(Installer.InstalledArg)) tray.ShowBalloonTip(5000, L.InstalledTitle, L.InstalledNote, Forms.ToolTipIcon.Info);
+        else if (e.Args.Contains(Installer.UpdatedArg)) tray.ShowBalloonTip(5000, L.UpdatedTitle(Updates.CurrentVersion), L.UpdatedNote, Forms.ToolTipIcon.Info);
 
         // First run: nothing works without a key, so start where it goes.
         if (string.IsNullOrEmpty(Credentials.Read(Settings.Current.Provider))) ShowSettings();

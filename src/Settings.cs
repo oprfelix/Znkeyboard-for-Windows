@@ -79,6 +79,7 @@ public sealed class Settings
     public static Settings Current { get; private set; } = Load();
 
     private static readonly string Folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ZnKeyboard");
+    public static string FolderPath => Folder;
     private static readonly string FilePath = Path.Combine(Folder, "settings.json");
 
     private static Settings Load()
@@ -150,12 +151,15 @@ public sealed class Settings
             using var key = Registry.CurrentUser.OpenSubKey(RunKey);
             return key?.GetValue("ZnKeyboard") is string;
         }
-        set
-        {
-            using var key = Registry.CurrentUser.CreateSubKey(RunKey);
-            if (value) key.SetValue("ZnKeyboard", $"\"{Environment.ProcessPath}\"");
-            else key.DeleteValue("ZnKeyboard", throwOnMissingValue: false);
-        }
+        set => SetStartWithWindows(value ? Environment.ProcessPath : null);
+    }
+
+    /// <summary>Starts <paramref name="exe"/> with Windows, or nothing when null.</summary>
+    public static void SetStartWithWindows(string? exe)
+    {
+        using var key = Registry.CurrentUser.CreateSubKey(RunKey);
+        if (exe != null) key.SetValue("ZnKeyboard", $"\"{exe}\"");
+        else key.DeleteValue("ZnKeyboard", throwOnMissingValue: false);
     }
 }
 
@@ -203,6 +207,13 @@ public static class Credentials
         provider == Provider.Gemini ? "ZnKeyboard/gemini-api-key" : "ZnKeyboard/openai-api-key";
 
     public static string? Read(Provider provider) => ReadTarget(Target(provider));
+
+    /// <summary>Removes every key ZnKeyboard saved (when uninstalling).</summary>
+    public static void DeleteAll()
+    {
+        foreach (var provider in Enum.GetValues<Provider>()) CredDelete(Target(provider), CredTypeGeneric, 0);
+        CredDelete(LegacyDeepSeekTarget, CredTypeGeneric, 0);
+    }
 
     /// <summary>Moves a 0.3.0–0.3.1 DeepSeek key to the OpenAI-compatible provider, then removes it.</summary>
     public static void MoveDeepSeekKey()
