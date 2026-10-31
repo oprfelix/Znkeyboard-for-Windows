@@ -4,10 +4,15 @@ using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
 using System.Windows.Threading;
+using Wpf.Ui.Controls;
+using Button = Wpf.Ui.Controls.Button;
+using MenuItem = System.Windows.Controls.MenuItem;
+using TextBlock = System.Windows.Controls.TextBlock;
 
 namespace ZnKeyboard;
 
@@ -26,8 +31,9 @@ public sealed class SelectionPill : IDisposable
     public Func<bool> IsSuspended { get; set; } = () => false;
 
     private readonly Window window;
-    private readonly TextBlock chipText = new() { FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = Brushes.White };
+    private readonly TextBlock chipText = new() { FontSize = 11, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
     private readonly Button chip;
+    private readonly Button polishButton, translateButton;
     private readonly Native.HookProc mouseProc, keyboardProc; // Kept alive: the hooks call them.
     private readonly IntPtr mouseHook, keyboardHook;
     private readonly DispatcherTimer watch = new() { Interval = TimeSpan.FromMilliseconds(300) };
@@ -37,21 +43,49 @@ public sealed class SelectionPill : IDisposable
     private IntPtr sourceWindow;
     private int checkGeneration;
 
-    private static readonly Brush Ink = new SolidColorBrush(Color.FromRgb(0x23, 0x40, 0x80));
-
     public SelectionPill()
     {
+        // The target language as an accent chip, like the Mac and Android versions.
+        chipText.SetResourceReference(TextBlock.ForegroundProperty, "TextOnAccentFillColorPrimaryBrush");
+        var chevron = new SymbolIcon(SymbolRegular.ChevronDown12) { FontSize = 9, Margin = new Thickness(3, 1, 0, 0) };
+        chevron.SetResourceReference(Control.ForegroundProperty, "TextOnAccentFillColorPrimaryBrush");
+        var chipFace = new Border
+        {
+            CornerRadius = new CornerRadius(9),
+            Padding = new Thickness(8, 2, 7, 3),
+            Child = new StackPanel { Orientation = Orientation.Horizontal, Children = { chipText, chevron } },
+        };
+        chipFace.SetResourceReference(Border.BackgroundProperty, "AccentFillColorDefaultBrush");
         chip = new Button
         {
-            Content = new Border { Background = Ink, CornerRadius = new CornerRadius(9), Padding = new Thickness(7, 1, 7, 2), Child = chipText },
-            Background = Brushes.Transparent,
+            Content = chipFace,
+            Appearance = ControlAppearance.Transparent,
             BorderThickness = new Thickness(0),
             Padding = new Thickness(2, 0, 4, 0),
             Cursor = System.Windows.Input.Cursors.Hand,
+            ToolTip = L.TranslateMenu,
         };
         chip.Click += (_, _) => ChooseLanguage();
-        var polish = Flat("✨ " + L.Polish, () => { Hide(); OnPolish(); });
-        var translate = Flat(L.TranslateShort, () => { Hide(); OnTranslate(); });
+        var polish = polishButton = Flat(L.Polish, SymbolRegular.Sparkle16, () => { Hide(); OnPolish(); });
+        var translate = translateButton = Flat(L.TranslateShort, SymbolRegular.Translate16, () => { Hide(); OnTranslate(); });
+        var divider = new Border { Width = 1, Height = 16, Margin = new Thickness(2, 0, 2, 0) };
+        divider.SetResourceReference(Border.BackgroundProperty, "DividerStrokeColorDefaultBrush");
+        var face = new Border
+        {
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(18),
+            Padding = new Thickness(4, 3, 4, 3),
+            Margin = new Thickness(10, 8, 10, 14),
+            Effect = new DropShadowEffect { BlurRadius = 16, ShadowDepth = 4, Direction = 270, Opacity = 0.18 },
+            Child = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Children = { polish, divider, translate, chip },
+            },
+        };
+        face.SetResourceReference(Border.BackgroundProperty, "SolidBackgroundFillColorBaseBrush");
+        face.SetResourceReference(Border.BorderBrushProperty, "SurfaceStrokeColorFlyoutBrush");
+        face.SetResourceReference(TextElement.ForegroundProperty, "TextFillColorPrimaryBrush");
 
         window = new Window
         {
@@ -63,29 +97,9 @@ public sealed class SelectionPill : IDisposable
             ShowActivated = false,
             Topmost = true,
             SizeToContent = SizeToContent.WidthAndHeight,
-            FontFamily = new FontFamily("Microsoft YaHei UI, Segoe UI"),
+            FontFamily = new FontFamily("Segoe UI Variable Text, Microsoft YaHei UI, Segoe UI"),
             FontSize = 12,
-            Content = new Border
-            {
-                Background = new SolidColorBrush(Color.FromRgb(0xFB, 0xFB, 0xFD)),
-                BorderBrush = new SolidColorBrush(Color.FromArgb(0x30, 0, 0, 0)),
-                BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(16),
-                Padding = new Thickness(4, 2, 4, 2),
-                Margin = new Thickness(8),
-                Effect = new DropShadowEffect { BlurRadius = 12, ShadowDepth = 2, Opacity = 0.2 },
-                Child = new StackPanel
-                {
-                    Orientation = Orientation.Horizontal,
-                    Children =
-                    {
-                        polish,
-                        new Border { Width = 1, Height = 14, Background = new SolidColorBrush(Color.FromArgb(0x30, 0, 0, 0)), Margin = new Thickness(2, 0, 2, 0) },
-                        translate,
-                        chip,
-                    },
-                },
-            },
+            Content = face,
         };
         // Clicking the pill must not take focus from the app whose text is selected.
         window.SourceInitialized += (_, _) =>
@@ -212,7 +226,9 @@ public sealed class SelectionPill : IDisposable
         else return; // A keyboard selection with no reported position: nothing to anchor to.
 
         sourceWindow = foreground;
-        chipText.Text = Settings.Current.Target.Code + " ▾";
+        chipText.Text = Settings.Current.Target.Code;
+        polishButton.ToolTip = $"{L.Polish}  {Settings.Current.ShortcutFor(ShortcutAction.Polish).Display}";
+        translateButton.ToolTip = $"{L.TranslateShort} {Settings.Current.Target.DisplayName}  {Settings.Current.ShortcutFor(ShortcutAction.Translate).Display}";
         var scale = Native.ScaleAt(anchor);
         window.Left = anchor.X / scale - 4;
         window.Top = anchor.Y / scale + 2;
@@ -231,21 +247,23 @@ public sealed class SelectionPill : IDisposable
             {
                 Settings.Current.TranslateTarget = language.Code;
                 Settings.Current.Save();
-                chipText.Text = language.Code + " ▾";
+                chipText.Text = language.Code;
             };
             menu.Items.Add(item);
         }
         menu.IsOpen = true;
     }
 
-    private static Button Flat(string label, Action action)
+    /// <summary>A borderless pill segment with an icon; the shortcut shows in its tooltip.</summary>
+    private static Button Flat(string label, SymbolRegular symbol, Action action)
     {
         var button = new Button
         {
             Content = label,
-            Background = Brushes.Transparent,
+            Icon = new SymbolIcon(symbol) { FontSize = 14 },
+            Appearance = ControlAppearance.Transparent,
             BorderThickness = new Thickness(0),
-            Padding = new Thickness(8, 4, 8, 4),
+            Padding = new Thickness(10, 5, 10, 5),
             Cursor = System.Windows.Input.Cursors.Hand,
         };
         button.Click += (_, _) => action();

@@ -11,11 +11,15 @@ using System.Threading.Tasks;
 
 namespace ZnKeyboard;
 
-/// <summary>Polish only, or polish and translate into <see cref="Target"/>.</summary>
-public sealed record RewriteMode(TranslateLanguage? Target)
+/// <summary>
+/// Polish only, polish and translate into <see cref="Target"/>, or (<see cref="IsRead"/>) a faithful
+/// translation to read, for screenshot translation.
+/// </summary>
+public sealed record RewriteMode(TranslateLanguage? Target, bool IsRead = false)
 {
     public static readonly RewriteMode Polish = new((TranslateLanguage?)null);
     public static RewriteMode Translate(TranslateLanguage target) => new(target);
+    public static RewriteMode Read(TranslateLanguage target) => new(target, true);
 }
 
 public enum RewriteFailure { MissingKey, BadEndpoint, TooLong, NoChange, Http, BadResponse, Network }
@@ -190,7 +194,8 @@ public sealed class AIClient
             var content = (string?)choice["message"]?["content"] ?? throw new RewriteException(RewriteFailure.BadResponse);
             var result = ((string?)JsonNode.Parse(StripFences(content))?["text"])?.Trim();
             if (string.IsNullOrEmpty(result)) throw new RewriteException(RewriteFailure.BadResponse);
-            if (result == text.Trim()) throw new RewriteException(RewriteFailure.NoChange);
+            // Text already in the reading language comes back as is, which is fine for reading.
+            if (!mode.IsRead && result == text.Trim()) throw new RewriteException(RewriteFailure.NoChange);
             return result;
         }
         catch (JsonException) { throw new RewriteException(RewriteFailure.BadResponse); }
@@ -250,6 +255,8 @@ public static class Prompts
 {
     public static string System(RewriteMode mode)
     {
+        if (mode.IsRead && mode.Target is { } reading)
+            return (Load("read") ?? ReadFallback).Replace("{language}", reading.Name);
         var parts = new System.Collections.Generic.List<string> { Load("rewrite_base") ?? Fallback };
         if (mode.Target is { } target && Load("translate") is { } translate)
         {
@@ -266,6 +273,9 @@ public static class Prompts
         using var reader = new StreamReader(stream, Encoding.UTF8);
         return reader.ReadToEnd().Trim();
     }
+
+    private const string ReadFallback = "Translate the user's text faithfully into {language}, keeping its meaning, facts and line breaks. " +
+        "Return a valid JSON object with exactly one field, `text`, containing only the translation.";
 
     private const string Fallback = "Polish the user's text while preserving its meaning, tone, and language. " +
         "Return a valid JSON object with exactly one field, `text`, containing only the rewritten text.";

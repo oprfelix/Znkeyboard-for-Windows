@@ -14,7 +14,7 @@ public enum Provider { Gemini, OpenAICompatible }
 /// <summary>Endpoints the OpenAI-compatible provider offers without typing an address.</summary>
 public enum ApiPreset { DeepSeek, Custom }
 
-public enum ShortcutAction { Polish, Translate }
+public enum ShortcutAction { Polish, Translate, Screenshot }
 
 /// <summary>A global shortcut: Win32 MOD_* flags, a virtual-key code, and the key's name ("R", "F5").</summary>
 public sealed record Shortcut(int Modifiers, int Key, string KeyName)
@@ -36,9 +36,13 @@ public sealed record Shortcut(int Modifiers, int Key, string KeyName)
 
     public bool Collides(Shortcut other) => Modifiers == other.Modifiers && Key == other.Key;
 
-    public static Shortcut Default(ShortcutAction action) => action == ShortcutAction.Polish
-        ? new Shortcut(Control | Alt, 0x52, "R")
-        : new Shortcut(Control | Alt, 0x54, "T");
+    /// <summary>Ctrl+Alt+R / T / E: the same letters as ⇧⌘R / T / E on the Mac.</summary>
+    public static Shortcut Default(ShortcutAction action) => action switch
+    {
+        ShortcutAction.Polish => new Shortcut(Control | Alt, 0x52, "R"),
+        ShortcutAction.Translate => new Shortcut(Control | Alt, 0x54, "T"),
+        _ => new Shortcut(Control | Alt, 0x45, "E"),
+    };
 }
 
 /// <summary>
@@ -62,12 +66,15 @@ public sealed class Settings
     public string GeminiModel { get; set; } = DefaultGeminiModel;
     public string OpenAIModel { get; set; } = DefaultOpenAIModel;
     public string TranslateTarget { get; set; } = "EN";
+    /// <summary>The language screenshot translation reads into.</summary>
+    public string ScreenshotTarget { get; set; } = "ZH";
     /// <summary>"system", "zh" or "en".</summary>
     public string UiLanguage { get; set; } = "system";
     /// <summary>The 润色 | AI 翻译为 pill on selected text. On by default.</summary>
     public bool SelectionPill { get; set; } = true;
     public Shortcut? PolishShortcut { get; set; }
     public Shortcut? TranslateShortcut { get; set; }
+    public Shortcut? ScreenshotShortcut { get; set; }
 
     public static Settings Current { get; private set; } = Load();
 
@@ -104,14 +111,25 @@ public sealed class Settings
         ? (GeminiModels.IsLite(GeminiModel) ? GeminiModel : DefaultGeminiModel)
         : (string.IsNullOrWhiteSpace(OpenAIModel) ? DefaultOpenAIModel : OpenAIModel.Trim());
 
-    public Shortcut ShortcutFor(ShortcutAction action) =>
-        (action == ShortcutAction.Polish ? PolishShortcut : TranslateShortcut) ?? Shortcut.Default(action);
+    public Shortcut ShortcutFor(ShortcutAction action) => action switch
+    {
+        ShortcutAction.Polish => PolishShortcut,
+        ShortcutAction.Translate => TranslateShortcut,
+        _ => ScreenshotShortcut,
+    } ?? Shortcut.Default(action);
 
     public void SetShortcut(ShortcutAction action, Shortcut shortcut)
     {
-        if (action == ShortcutAction.Polish) PolishShortcut = shortcut; else TranslateShortcut = shortcut;
+        switch (action)
+        {
+            case ShortcutAction.Polish: PolishShortcut = shortcut; break;
+            case ShortcutAction.Translate: TranslateShortcut = shortcut; break;
+            default: ScreenshotShortcut = shortcut; break;
+        }
         Save();
     }
+
+    public TranslateLanguage ReadTarget => Languages.ByCode(ScreenshotTarget);
 
     /// <summary>The client for the selected provider and its key, model and endpoint.</summary>
     public AIClient CreateClient() => new(Provider, CompatibleBaseUrl, Credentials.Read(Provider) ?? "", ModelFor(Provider));

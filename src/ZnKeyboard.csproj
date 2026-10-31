@@ -3,7 +3,8 @@
        Builds on macOS too (EnableWindowsTargeting); it only runs on Windows. -->
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net10.0-windows</TargetFramework>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
@@ -17,7 +18,7 @@
     <RootNamespace>ZnKeyboard</RootNamespace>
     <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>0.3.3</Version>
+    <Version>0.4.0</Version>
     <Product>ZnKeyboard for Windows</Product>
     <Copyright>GPL-3.0</Copyright>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
@@ -29,5 +30,8 @@
     <!-- Both icons come from znkeyboard-for-macos/scripts/make_icon.swift. -->
     <EmbeddedResource Include="Assets\AppIcon.ico" LogicalName="AppIcon.ico" />
     <EmbeddedResource Include="Assets\TrayIcon.ico" LogicalName="TrayIcon.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="WPF-UI" Version="4.3.0" />
   </ItemGroup>
 </Project>

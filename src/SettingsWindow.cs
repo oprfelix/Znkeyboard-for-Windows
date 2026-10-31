@@ -4,65 +4,122 @@ using System.Linq;
 using System.Threading;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
+using Wpf.Ui.Appearance;
+using Wpf.Ui.Controls;
+using Button = Wpf.Ui.Controls.Button;
+using ComboBox = System.Windows.Controls.ComboBox;
+using PasswordBox = Wpf.Ui.Controls.PasswordBox;
+using TextBlock = System.Windows.Controls.TextBlock;
+using TextBox = Wpf.Ui.Controls.TextBox;
 
 namespace ZnKeyboard;
 
 /// <summary>
-/// Settings in four cards: AI service (provider, key, model), usage (target language, shortcuts),
-/// general (language, start with Windows, version). Rebuilt whole when the UI language changes.
+/// Settings in the Windows 11 style: a Mica window with a navigation list on the left (AI service,
+/// usage, shortcuts, general) and a page of setting cards on the right. Follows Windows' light or
+/// dark mode; rebuilt whole when the UI language or the provider changes.
 /// </summary>
-public sealed class SettingsWindow : Window
+public sealed class SettingsWindow : FluentWindow
 {
+    private enum Page { Ai, Usage, Shortcuts, General }
+
     private readonly App app;
-    private readonly StackPanel root = new() { Margin = new Thickness(20, 16, 20, 20) };
+    private readonly TitleBar titleBar = new() { ShowMaximize = false, ShowMinimize = true };
+    private readonly StackPanel nav = new() { Margin = new Thickness(8, 4, 8, 8) };
+    private readonly StackPanel page = new() { Margin = new Thickness(28, 4, 36, 32), MaxWidth = 760 };
+    private readonly ScrollViewer pageScroll = new() { VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+    private Page current = Page.Ai;
     private CancellationTokenSource? modelLoad;
     /// <summary>The line under the key: a link to get one, or the result of checking it.</summary>
     private TextBlock? keyStatus;
+    private ComboBox? modelBox;
     private readonly System.Windows.Threading.DispatcherTimer keySaveTimer = new() { Interval = TimeSpan.FromMilliseconds(600) };
-
-    private static readonly Brush Muted = new SolidColorBrush(Color.FromRgb(0x6B, 0x6F, 0x7A));
-    private static readonly Brush Accent = new SolidColorBrush(Color.FromRgb(0x23, 0x40, 0x80));
+    /// <summary>Saves the key field of the current build of the page.</summary>
+    private Action? keySaveTick;
 
     public SettingsWindow(App app)
     {
         this.app = app;
         keySaveTimer.Tick += (_, _) => keySaveTick?.Invoke();
-        Width = 560;
-        SizeToContent = SizeToContent.Height;
-        MaxHeight = SystemParameters.WorkArea.Height - 40;
-        ResizeMode = ResizeMode.CanMinimize;
+        Width = 900;
+        Height = 660;
+        MinWidth = 720;
+        MinHeight = 480;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
-        FontFamily = new FontFamily("Microsoft YaHei UI, Segoe UI");
-        FontSize = 13;
-        Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF4, 0xF7));
+        ExtendsContentIntoTitleBar = true;
+        WindowBackdropType = WindowBackdropType.Mica;
+        FontFamily = new FontFamily("Segoe UI Variable Text, Microsoft YaHei UI, Segoe UI");
         Icon = App.IconImage();
-        Content = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = root };
+        titleBar.Icon = new ImageIcon { Source = App.IconImage(), Width = 16, Height = 16 };
+
+        var body = new Grid();
+        body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(232) });
+        body.ColumnDefinitions.Add(new ColumnDefinition());
+        body.Children.Add(nav);
+        pageScroll.Content = page;
+        Grid.SetColumn(pageScroll, 1);
+        body.Children.Add(pageScroll);
+
+        var root = new Grid();
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition());
+        root.Children.Add(titleBar);
+        Grid.SetRow(body, 1);
+        root.Children.Add(body);
+        Content = root;
+
+        Loaded += (_, _) => SystemThemeWatcher.Watch(this, WindowBackdropType.Mica, true);
         Build();
     }
 
     private void Build()
     {
         Title = L.SettingsTitle;
-        root.Children.Clear();
-        var settings = Settings.Current;
+        titleBar.Title = L.SettingsTitle;
+        nav.Children.Clear();
+        nav.Children.Add(NavItem(Page.Ai, SymbolRegular.BrainCircuit24, L.AiSection));
+        nav.Children.Add(NavItem(Page.Usage, SymbolRegular.DesktopCursor24, L.UsageSection));
+        nav.Children.Add(NavItem(Page.Shortcuts, SymbolRegular.Keyboard24, L.ShortcutsSection));
+        nav.Children.Add(NavItem(Page.General, SymbolRegular.Settings24, L.GeneralSection));
 
-        // AI service
-        var ai = Card(L.AiSection);
-        var provider = new ComboBox { ItemsSource = new[] { "Google Gemini", L.OpenAICompatible }, SelectedIndex = (int)settings.Provider };
+        keySaveTimer.Stop();
+        keySaveTick = null;
+        keyStatus = null;
+        modelBox = null;
+        page.Children.Clear();
+        switch (current)
+        {
+            case Page.Ai: BuildAi(); break;
+            case Page.Usage: BuildUsage(); break;
+            case Page.Shortcuts: BuildShortcuts(); break;
+            default: BuildGeneral(); break;
+        }
+        pageScroll.ScrollToTop();
+    }
+
+    private void Rebuild() => Dispatcher.BeginInvoke(Build);
+
+    // ---- Pages ----
+
+    private void BuildAi()
+    {
+        var settings = Settings.Current;
+        PageTitle(L.AiSection);
+
+        var provider = Combo(new[] { "Google Gemini", L.OpenAICompatible }, (int)settings.Provider);
         provider.SelectionChanged += (_, _) =>
         {
             settings.Provider = (Provider)provider.SelectedIndex;
             settings.Save();
-            Build();
+            Rebuild();
         };
-        ai.Children.Add(Row(L.Provider, provider));
+        page.Children.Add(Card(SymbolRegular.PlugConnected24, L.Provider, L.ProviderNote, provider));
 
         if (settings.Provider == Provider.OpenAICompatible)
         {
-            var preset = new ComboBox { ItemsSource = new[] { "DeepSeek", L.CustomPreset }, SelectedIndex = (int)settings.EffectivePreset };
+            var preset = Combo(new[] { "DeepSeek", L.CustomPreset }, (int)settings.EffectivePreset);
             preset.SelectionChanged += (_, _) =>
             {
                 settings.Preset = (ApiPreset)preset.SelectedIndex;
@@ -70,21 +127,21 @@ public sealed class SettingsWindow : Window
                 if (settings.Preset == ApiPreset.DeepSeek && !settings.OpenAIModel.StartsWith("deepseek", StringComparison.OrdinalIgnoreCase))
                     settings.OpenAIModel = Settings.DefaultOpenAIModel;
                 settings.Save();
-                Dispatcher.BeginInvoke(Build);
+                Rebuild();
             };
-            ai.Children.Add(Row(L.ApiPreset, preset));
+            page.Children.Add(Card(SymbolRegular.Globe24, L.ApiPreset, L.ApiPresetNote, preset));
         }
 
         if (settings.Provider == Provider.OpenAICompatible && settings.EffectivePreset == ApiPreset.Custom)
         {
-            var baseUrl = new TextBox { Text = settings.OpenAIBaseUrl, Padding = new Thickness(4, 3, 4, 3) };
+            var baseUrl = new TextBox { Text = settings.OpenAIBaseUrl, Width = 320, PlaceholderText = "https://" };
             baseUrl.LostFocus += (_, _) => { settings.OpenAIBaseUrl = baseUrl.Text.Trim(); settings.Save(); LoadModels(); };
-            ai.Children.Add(Row(L.ApiBaseUrl, baseUrl));
+            page.Children.Add(Card(SymbolRegular.Globe24, L.ApiBaseUrl, L.ApiBaseUrlNote, baseUrl));
         }
 
         // The key saves itself shortly after typing or pasting stops, then gets checked.
-        var key = new PasswordBox { Password = Credentials.Read(settings.Provider) ?? "", Padding = new Thickness(4, 3, 4, 3) };
-        keyStatus = new TextBlock { FontSize = 12, Margin = new Thickness(0, 0, 0, 10), TextWrapping = TextWrapping.Wrap };
+        var key = new PasswordBox { Password = Credentials.Read(settings.Provider) ?? "", Width = 320, PlaceholderText = L.ApiKey };
+        keyStatus = new TextBlock { FontSize = 12, Margin = new Thickness(2, 6, 0, 0), TextWrapping = TextWrapping.Wrap, MaxWidth = 320 };
         void SaveKey()
         {
             keySaveTimer.Stop();
@@ -92,68 +149,88 @@ public sealed class SettingsWindow : Window
             Credentials.Write(settings.Provider, key.Password);
             LoadModels();
         }
-        keySaveTimer.Stop();
         keySaveTick = SaveKey;
         key.PasswordChanged += (_, _) => { keySaveTimer.Stop(); keySaveTimer.Start(); };
         key.KeyDown += (_, e) => { if (e.Key == Key.Enter) SaveKey(); };
         key.LostFocus += (_, _) => SaveKey();
-        ai.Children.Add(Row(L.ApiKey, key));
-        ai.Children.Add(Indented(keyStatus));
+        page.Children.Add(Card(SymbolRegular.ShieldLock24, L.ApiKey, L.KeyStoredNote, new StackPanel { Children = { key, keyStatus } }));
 
-        var model = new ComboBox { IsEditable = settings.Provider == Provider.OpenAICompatible };
+        var model = new ComboBox { IsEditable = settings.Provider == Provider.OpenAICompatible, Width = 320 };
         modelBox = model;
         FillModels(Array.Empty<string>());
         model.SelectionChanged += (_, _) => { if (model.SelectedItem is string id) SaveModel(id); };
         model.LostFocus += (_, _) => { if (model.IsEditable) SaveModel(model.Text); };
-        ai.Children.Add(Row(L.Model, model));
-        var note = settings.Provider == Provider.Gemini ? L.GeminiNote : settings.EffectivePreset == ApiPreset.DeepSeek ? L.DeepSeekNote : L.OpenAINote;
-        ai.Children.Add(Note(note + " " + L.PrivacyNote));
-        LoadModels();
+        page.Children.Add(Card(SymbolRegular.Bot24, L.Model, L.ModelNote, model));
 
-        // Usage
-        var usage = Card(L.UsageSection);
-        var target = new ComboBox
-        {
-            ItemsSource = Languages.All.Select(l => l.Label).ToList(),
-            SelectedIndex = Languages.All.ToList().FindIndex(l => l.Code == settings.TranslateTarget),
-        };
+        Footnote(settings.Provider == Provider.Gemini ? L.GeminiNote : settings.EffectivePreset == ApiPreset.DeepSeek ? L.DeepSeekNote : L.OpenAINote);
+        LoadModels();
+    }
+
+    private void BuildUsage()
+    {
+        var settings = Settings.Current;
+        PageTitle(L.UsageSection);
+
+        var target = Combo(Languages.All.Select(l => l.Label).ToArray(), Languages.All.ToList().FindIndex(l => l.Code == settings.TranslateTarget));
         target.SelectionChanged += (_, _) =>
         {
             settings.TranslateTarget = Languages.All[target.SelectedIndex].Code;
             settings.Save();
         };
-        usage.Children.Add(Row(L.TranslateMenu, target));
-        var pill = new CheckBox { Content = L.SelectionPill, IsChecked = settings.SelectionPill, Margin = new Thickness(0, 4, 0, 2) };
-        pill.Click += (_, _) => { settings.SelectionPill = pill.IsChecked == true; settings.Save(); };
-        usage.Children.Add(Indented(pill));
-        usage.Children.Add(Indented(new TextBlock { Text = L.SelectionPillNote, Foreground = Muted, FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 10) }));
-        usage.Children.Add(Row(L.PolishShortcut, Recorder(ShortcutAction.Polish)));
-        usage.Children.Add(Row(L.TranslateShortcut, Recorder(ShortcutAction.Translate)));
-        usage.Children.Add(Note(L.ShortcutsNote));
+        page.Children.Add(Card(SymbolRegular.Translate24, L.TranslateMenu, L.TranslateTargetNote, target));
 
-        // General
-        var general = Card(L.GeneralSection);
-        var language = new ComboBox
+        var reading = Combo(Languages.All.Select(l => l.Label).ToArray(), Languages.All.ToList().FindIndex(l => l.Code == settings.ScreenshotTarget));
+        reading.SelectionChanged += (_, _) =>
         {
-            ItemsSource = new[] { L.FollowSystem, "中文", "English" },
-            SelectedIndex = settings.UiLanguage switch { "zh" => 1, "en" => 2, _ => 0 },
+            settings.ScreenshotTarget = Languages.All[reading.SelectedIndex].Code;
+            settings.Save();
         };
+        page.Children.Add(Card(SymbolRegular.ScanText24, L.ScreenshotTarget, L.ScreenshotTargetNote, reading));
+
+        var pill = new ToggleSwitch { IsChecked = settings.SelectionPill };
+        pill.Click += (_, _) => { settings.SelectionPill = pill.IsChecked == true; settings.Save(); };
+        page.Children.Add(Card(SymbolRegular.DesktopCursor24, L.SelectionPill, L.SelectionPillNote, pill));
+    }
+
+    private void BuildShortcuts()
+    {
+        PageTitle(L.ShortcutsSection);
+        page.Children.Add(Card(SymbolRegular.Sparkle24, L.PolishShortcut, L.PolishShortcutNote, Recorder(ShortcutAction.Polish)));
+        page.Children.Add(Card(SymbolRegular.Translate24, L.TranslateShortcut, L.TranslateShortcutNote, Recorder(ShortcutAction.Translate)));
+        page.Children.Add(Card(SymbolRegular.ScanText24, L.ScreenshotShortcut, L.ScreenshotShortcutNote, Recorder(ShortcutAction.Screenshot)));
+        Footnote(L.ShortcutsNote);
+    }
+
+    private void BuildGeneral()
+    {
+        var settings = Settings.Current;
+        PageTitle(L.GeneralSection);
+
+        var language = Combo(new[] { L.FollowSystem, "中文", "English" }, settings.UiLanguage switch { "zh" => 1, "en" => 2, _ => 0 });
         language.SelectionChanged += (_, _) =>
         {
             settings.UiLanguage = language.SelectedIndex switch { 1 => "zh", 2 => "en", _ => "system" };
             settings.Save();
             app.RefreshTray();
             // Rebuild after this event finishes, so the combo box isn't torn down mid-change.
-            Dispatcher.BeginInvoke(Build);
+            Rebuild();
         };
-        general.Children.Add(Row(L.UiLanguage, language));
-        var startup = new CheckBox { Content = L.StartWithWindows, IsChecked = Settings.StartsWithWindows, Margin = new Thickness(0, 4, 0, 8) };
+        page.Children.Add(Card(SymbolRegular.LocalLanguage24, L.UiLanguage, L.UiLanguageNote, language));
+
+        var startup = new ToggleSwitch { IsChecked = Settings.StartsWithWindows };
         startup.Click += (_, _) => Settings.StartsWithWindows = startup.IsChecked == true;
-        general.Children.Add(Indented(startup));
-        general.Children.Add(Row(L.Version, new TextBlock { Text = typeof(App).Assembly.GetName().Version?.ToString(3) ?? "–", VerticalAlignment = VerticalAlignment.Center }));
+        page.Children.Add(Card(SymbolRegular.Power24, L.StartWithWindows, L.StartWithWindowsNote, startup));
+
+        var log = new Button { Content = L.Open, Icon = new SymbolIcon(SymbolRegular.Open24) };
+        log.Click += (_, _) => DebugLog.Open();
+        page.Children.Add(Card(SymbolRegular.Wrench24, L.DiagnosticLog, L.DiagnosticLogNote, log));
+
+        var update = new Button { Content = L.CheckForUpdates, Icon = new SymbolIcon(SymbolRegular.ArrowDownload24) };
+        update.Click += (_, _) => Updates.Check();
+        page.Children.Add(Card(SymbolRegular.Info24, L.Version, "ZnKeyboard for Windows " + Updates.CurrentVersion, update));
     }
 
-    private ComboBox? modelBox;
+    // ---- AI service helpers ----
 
     private void SaveModel(string id)
     {
@@ -177,18 +254,17 @@ public sealed class SettingsWindow : Window
         if (modelBox.IsEditable) modelBox.Text = current;
     }
 
-    /// <summary>Saves the key field of the current build of the window.</summary>
-    private Action? keySaveTick;
-
-    private static readonly Brush Green = new SolidColorBrush(Color.FromRgb(0x2E, 0x7D, 0x32));
-
     /// <summary>A coloured dot and a short line under the key.</summary>
-    private void ShowKeyCheck(Brush color, string text)
+    private void ShowKeyCheck(string brushKey, string text)
     {
         if (keyStatus == null) return;
         keyStatus.Inlines.Clear();
-        keyStatus.Inlines.Add(new Run("● ") { Foreground = color });
-        keyStatus.Inlines.Add(new Run(text) { Foreground = color });
+        var dot = new System.Windows.Documents.Run("● ");
+        dot.SetResourceReference(System.Windows.Documents.TextElement.ForegroundProperty, brushKey);
+        var line = new System.Windows.Documents.Run(text);
+        line.SetResourceReference(System.Windows.Documents.TextElement.ForegroundProperty, brushKey == "SystemFillColorSuccessBrush" ? brushKey : brushKey);
+        keyStatus.Inlines.Add(dot);
+        keyStatus.Inlines.Add(line);
     }
 
     /// <summary>No key yet: where to get one for the current provider.</summary>
@@ -199,10 +275,11 @@ public sealed class SettingsWindow : Window
         var settings = Settings.Current;
         if (settings.Provider == Provider.OpenAICompatible && settings.EffectivePreset == ApiPreset.Custom) return;
         var gemini = settings.Provider == Provider.Gemini;
-        var link = new Hyperlink(new Run(gemini ? L.NoKeyYet : L.NoDeepSeekKeyYet))
+        var link = new System.Windows.Documents.Hyperlink(new System.Windows.Documents.Run(gemini ? L.NoKeyYet : L.NoDeepSeekKeyYet))
         {
             NavigateUri = new Uri(gemini ? "https://aistudio.google.com/apikey" : "https://platform.deepseek.com/api_keys"),
         };
+        link.SetResourceReference(System.Windows.Documents.TextElement.ForegroundProperty, "AccentTextFillColorPrimaryBrush");
         link.RequestNavigate += (_, e) => Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true });
         keyStatus.Inlines.Add(link);
     }
@@ -219,22 +296,22 @@ public sealed class SettingsWindow : Window
             ShowGetKeyLink();
             return;
         }
-        ShowKeyCheck(Muted, L.KeyChecking);
+        ShowKeyCheck("TextFillColorTertiaryBrush", L.KeyChecking);
         try
         {
             var result = await client.ListModelsAsync(cancel.Token);
             if (cancel.IsCancellationRequested) return;
             if (result.Status is >= 200 and < 300)
             {
-                ShowKeyCheck(Green, L.KeyWorks);
+                ShowKeyCheck("SystemFillColorSuccessBrush", L.KeyWorks);
                 if (result.Models.Length > 0) FillModels(result.Models);
             }
             else if (result.Reason?.Contains("location is not supported", StringComparison.OrdinalIgnoreCase) == true)
-                ShowKeyCheck(Brushes.Firebrick, L.RegionUnsupported);
+                ShowKeyCheck("SystemFillColorCriticalBrush", L.RegionUnsupported);
             else if (result.Status is 400 or 401 or 403)
-                ShowKeyCheck(Brushes.Firebrick, L.KeyInvalid);
+                ShowKeyCheck("SystemFillColorCriticalBrush", L.KeyInvalid);
             else
-                ShowKeyCheck(Brushes.Firebrick, L.KeyUnverified(result.Status == 0 ? L.NetworkFailed : result.Reason ?? $"HTTP {result.Status}"));
+                ShowKeyCheck("SystemFillColorCriticalBrush", L.KeyUnverified(result.Status == 0 ? L.NetworkFailed : result.Reason ?? $"HTTP {result.Status}"));
         }
         catch (Exception)
         {
@@ -242,20 +319,24 @@ public sealed class SettingsWindow : Window
         }
     }
 
+    // ---- Shortcuts ----
+
     /// <summary>A key cap that, once clicked, takes the next key combination. Esc cancels.</summary>
     private UIElement Recorder(ShortcutAction action)
     {
-        var button = new Button { Content = Settings.Current.ShortcutFor(action).Display, MinWidth = 140, Padding = new Thickness(10, 3, 10, 3), HorizontalAlignment = HorizontalAlignment.Left };
-        var reset = new TextBlock { Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
-        var resetLink = new Hyperlink(new Run(L.ResetDefault));
-        reset.Inlines.Add(resetLink);
-        var error = new TextBlock { Foreground = Brushes.Firebrick, FontSize = 12, TextWrapping = TextWrapping.Wrap };
+        var button = new Button { MinWidth = 150, Padding = new Thickness(14, 6, 14, 6), FontWeight = FontWeights.SemiBold };
+        var reset = new Button { Content = L.ResetDefault, Appearance = ControlAppearance.Transparent, Margin = new Thickness(0, 0, 8, 0) };
+        reset.SetResourceReference(ForegroundProperty, "AccentTextFillColorPrimaryBrush");
+        var error = new TextBlock { FontSize = 12, TextWrapping = TextWrapping.Wrap, MaxWidth = 260, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 4, 0, 0) };
+        error.SetResourceReference(TextBlock.ForegroundProperty, "SystemFillColorCriticalBrush");
         var recording = false;
 
         void Refresh()
         {
             button.Content = recording ? L.PressShortcut : Settings.Current.ShortcutFor(action).Display;
+            button.Appearance = recording ? ControlAppearance.Primary : ControlAppearance.Secondary;
             reset.Visibility = !recording && Settings.Current.ShortcutFor(action) != Shortcut.Default(action) ? Visibility.Visible : Visibility.Collapsed;
+            error.Visibility = string.IsNullOrEmpty(error.Text) ? Visibility.Collapsed : Visibility.Visible;
         }
         void Stop()
         {
@@ -292,6 +373,7 @@ public sealed class SettingsWindow : Window
             if ((modifiers & (ModifierKeys.Control | ModifierKeys.Alt | ModifierKeys.Windows)) == 0)
             {
                 error.Text = L.NeedModifier;
+                Refresh();
                 return;
             }
             var flags = 0;
@@ -303,10 +385,10 @@ public sealed class SettingsWindow : Window
             Apply(new Shortcut(flags, KeyInterop.VirtualKeyFromKey(key), KeyName(key)));
         };
         button.LostFocus += (_, _) => { if (recording) Stop(); };
-        resetLink.Click += (_, _) => Apply(null);
+        reset.Click += (_, _) => Apply(null);
         Refresh();
 
-        var line = new StackPanel { Orientation = Orientation.Horizontal, Children = { button, reset } };
+        var line = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Children = { reset, button } };
         return new StackPanel { Children = { line, error } };
     }
 
@@ -328,47 +410,70 @@ public sealed class SettingsWindow : Window
         _ => key.ToString(),
     };
 
-    private StackPanel Card(string heading)
+    // ---- Building blocks ----
+
+    /// <summary>A navigation entry: icon and label, with the accent bar and fill of the Windows 11 Settings app when selected.</summary>
+    private UIElement NavItem(Page target, SymbolRegular symbol, string label)
     {
-        var content = new StackPanel();
-        content.Children.Add(new TextBlock { Text = heading, FontSize = 14, FontWeight = FontWeights.SemiBold, Foreground = Accent, Margin = new Thickness(0, 0, 0, 10) });
-        root.Children.Add(new Border
+        var selected = target == current;
+        var bar = new Border { Width = 3, Height = 16, CornerRadius = new CornerRadius(2), Margin = new Thickness(0, 0, 10, 0), Opacity = selected ? 1 : 0 };
+        bar.SetResourceReference(Border.BackgroundProperty, "AccentTextFillColorPrimaryBrush");
+        var icon = new SymbolIcon(symbol) { FontSize = 18, Margin = new Thickness(0, 0, 12, 0), Filled = selected };
+        var text = new TextBlock { Text = label, FontSize = 14, VerticalAlignment = VerticalAlignment.Center, FontWeight = selected ? FontWeights.SemiBold : FontWeights.Normal };
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Children = { bar, icon, text } };
+        var item = new Border { CornerRadius = new CornerRadius(4), Padding = new Thickness(4, 9, 12, 9), Margin = new Thickness(0, 1, 0, 1), Child = row, Cursor = Cursors.Hand, Background = Brushes.Transparent };
+        if (selected) item.SetResourceReference(Border.BackgroundProperty, "SubtleFillColorSecondaryBrush");
+        item.MouseEnter += (_, _) => { if (!selected) item.SetResourceReference(Border.BackgroundProperty, "SubtleFillColorSecondaryBrush"); };
+        item.MouseLeave += (_, _) => { if (!selected) item.Background = Brushes.Transparent; };
+        item.MouseLeftButtonUp += (_, _) =>
         {
-            Background = Brushes.White,
-            CornerRadius = new CornerRadius(10),
-            BorderBrush = new SolidColorBrush(Color.FromArgb(0x1A, 0, 0, 0)),
-            BorderThickness = new Thickness(1),
-            Padding = new Thickness(16, 12, 16, 12),
-            Margin = new Thickness(0, 0, 0, 12),
-            Child = content,
-        });
-        return content;
+            if (selected) return;
+            current = target;
+            Rebuild();
+        };
+        return item;
     }
 
-    private static UIElement Row(string label, UIElement control)
-    {
-        var grid = new Grid { Margin = new Thickness(0, 0, 0, 8) };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition());
-        var text = new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center };
-        grid.Children.Add(text);
-        Grid.SetColumn((FrameworkElement)control, 1);
-        grid.Children.Add(control);
-        return grid;
-    }
-
-    private static UIElement Indented(FrameworkElement element)
-    {
-        element.Margin = new Thickness(120, element.Margin.Top, 0, element.Margin.Bottom);
-        return element;
-    }
-
-    private static UIElement Note(string text) => new TextBlock
+    private void PageTitle(string text) => page.Children.Add(new TextBlock
     {
         Text = text,
-        Foreground = Muted,
-        FontSize = 12,
-        TextWrapping = TextWrapping.Wrap,
-        Margin = new Thickness(0, 2, 0, 0),
+        FontSize = 28,
+        FontWeight = FontWeights.SemiBold,
+        Margin = new Thickness(0, 6, 0, 20),
+    });
+
+    /// <summary>A settings card: icon, title and one-line description on the left, the control on the right.</summary>
+    private static CardControl Card(SymbolRegular symbol, string title, string? description, UIElement control)
+    {
+        var header = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        header.Children.Add(new TextBlock { Text = title, FontSize = 14 });
+        if (description != null)
+        {
+            var note = new TextBlock { Text = description, FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 16, 0) };
+            note.SetResourceReference(TextBlock.ForegroundProperty, "TextFillColorSecondaryBrush");
+            header.Children.Add(note);
+        }
+        return new CardControl
+        {
+            Icon = new SymbolIcon(symbol) { FontSize = 22 },
+            Header = header,
+            Content = control,
+            Margin = new Thickness(0, 0, 0, 4),
+            Padding = new Thickness(16, 14, 16, 14),
+        };
+    }
+
+    private void Footnote(string text)
+    {
+        var note = new TextBlock { Text = text, FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(4, 12, 4, 0) };
+        note.SetResourceReference(TextBlock.ForegroundProperty, "TextFillColorTertiaryBrush");
+        page.Children.Add(note);
+    }
+
+    private static ComboBox Combo(string[] items, int selected) => new()
+    {
+        ItemsSource = items,
+        SelectedIndex = selected,
+        MinWidth = 220,
     };
 }
