@@ -29,6 +29,13 @@ public sealed class ReviewWindow : Window
     private readonly TextBlock title = new() { FontSize = 14, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
     private readonly ComboBox language = new() { Margin = new Thickness(8, 0, 0, 0), MinWidth = 140, VerticalAlignment = VerticalAlignment.Center };
     private bool updatingLanguage;
+    // Near the bottom of the screen the card opens above the pointer and grows upward from this edge.
+    private bool growsUp;
+    private double bottomEdge;
+    private Rect workArea;
+
+    /// <summary>Where the selection ends on screen (device pixels), when the app reports it; used once, by the next appearance.</summary>
+    public Rect? Anchor { get; set; }
     private readonly StackPanel body = new();
     private readonly StackPanel leftButtons = new() { Orientation = Orientation.Horizontal };
     private readonly StackPanel rightButtons = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
@@ -48,6 +55,8 @@ public sealed class ReviewWindow : Window
 
     public ReviewWindow()
     {
+        // The card grows as the result arrives: keep its anchored edge, and keep it on screen.
+        SizeChanged += (_, _) => { if (IsVisible) KeepOnScreen(); };
         WindowStyle = WindowStyle.None;
         AllowsTransparency = true;
         Background = Brushes.Transparent;
@@ -352,15 +361,49 @@ public sealed class ReviewWindow : Window
         return button;
     }
 
-    /// <summary>Just below and right of the pointer, kept inside the monitor's work area.</summary>
+    /// <summary>A typical result's height (DIPs); with less room than this below the pointer, the card opens upward.</summary>
+    private const double RoomForResult = 320;
+
+    /// <summary>Just below and right of the pointer, or above it near the bottom of the screen; kept inside the work area.</summary>
     private void PlaceAtCursor()
     {
-        var (cursor, scale, work) = Native.CursorAndMonitor();
+        // Under the selection when the app said where it is (Ctrl+A leaves the pointer anywhere), else the pointer.
+        var (cursor, cursorScale, cursorWork) = Native.CursorAndMonitor();
+        double scale;
+        Native.RECT work;
+        double x, below, above;
+        if (Anchor is { IsEmpty: false } anchor)
+        {
+            (scale, work) = Native.MonitorAt(new Native.POINT { X = (int)anchor.Left, Y = (int)anchor.Bottom });
+            x = anchor.Left / scale;
+            below = anchor.Bottom / scale + 6;
+            above = anchor.Top / scale - 6;
+        }
+        else
+        {
+            (scale, work) = (cursorScale, cursorWork);
+            x = cursor.X / scale;
+            below = cursor.Y / scale + 4;
+            above = cursor.Y / scale - 8;
+        }
+        Anchor = null;
+        workArea = new Rect(work.Left / scale, work.Top / scale, (work.Right - work.Left) / scale, (work.Bottom - work.Top) / scale);
         UpdateLayout();
         var height = ActualHeight > 0 ? ActualHeight : 200;
-        var left = cursor.X / scale - 8;
-        var top = cursor.Y / scale + 4;
-        Left = Math.Min(Math.Max(left, work.Left / scale), work.Right / scale - Width);
-        Top = Math.Min(Math.Max(top, work.Top / scale), work.Bottom / scale - height - 40);
+        var roomBelow = workArea.Bottom - below;
+        var roomAbove = above - workArea.Top;
+        growsUp = roomBelow < RoomForResult && roomAbove > roomBelow;
+        bottomEdge = above;
+        Left = Math.Min(Math.Max(x - 8, workArea.Left), workArea.Right - Width);
+        Top = growsUp ? bottomEdge - height : below;
+        KeepOnScreen();
+    }
+
+    private void KeepOnScreen()
+    {
+        if (workArea.IsEmpty) return;
+        var height = ActualHeight > 0 ? ActualHeight : 200;
+        if (growsUp) Top = bottomEdge - height;
+        Top = Math.Max(Math.Min(Top, workArea.Bottom - height - 8), workArea.Top);
     }
 }

@@ -81,7 +81,8 @@ public sealed class AIClient
 {
     public const int MaxSourceCharacters = 5_000;
     private const string GeminiBaseUrl = "https://generativelanguage.googleapis.com/v1beta/openai";
-    private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(30) };
+    // A whole response, not a stream: translating a few thousand characters can take over a minute.
+    private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(120) };
 
     public Provider Provider { get; }
     public string ApiKey { get; }

@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace ZnKeyboard;
 
@@ -43,8 +44,12 @@ public sealed class Controller
             return;
         }
 
+        // Where the selection ends, asked alongside the read, so the card can open beside it; an app
+        // that hasn't answered by then just gets the pointer.
+        var where = Task.Run(() => TextBridge.InspectFocusedSelection([]));
         // Read the selection before showing anything: once the panel takes focus, Ctrl+C would copy from it.
         var selection = await TextBridge.SelectedTextAsync();
+        panel.Anchor = where.IsCompletedSuccessfully && where.Result.state == TextBridge.SelectionState.Selected ? where.Result.end : null;
         if (cancel.IsCancellationRequested) return;
         if (string.IsNullOrWhiteSpace(selection))
         {
@@ -67,8 +72,12 @@ public sealed class Controller
     /// Screenshot translation: drag over part of the screen, read its text on this PC, and translate
     /// it to read. Text already in the reading language (Chinese by default) goes to English instead.
     /// </summary>
+    /// <summary>Set while the screen is dimmed for dragging; another Ctrl+Alt+E then does nothing.</summary>
+    private bool capturing;
+
     public async void RunScreenshot()
     {
+        if (capturing) return;
         running?.Cancel();
         var cancel = new CancellationTokenSource();
         running = cancel;
@@ -83,7 +92,11 @@ public sealed class Controller
             return;
         }
 
-        using var image = await ScreenText.SelectRegionAsync();
+        capturing = true;
+        System.Drawing.Bitmap? captured;
+        try { captured = await ScreenText.SelectRegionAsync(); }
+        finally { capturing = false; }
+        using var image = captured;
         if (image == null || cancel.IsCancellationRequested) return;
         var target = Settings.Current.ReadTarget;
         var mode = RewriteMode.Read(target);

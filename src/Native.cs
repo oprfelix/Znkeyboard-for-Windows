@@ -153,10 +153,17 @@ internal static class Native
     public static (POINT cursor, double scale, RECT work) CursorAndMonitor()
     {
         GetCursorPos(out var cursor);
-        var monitor = MonitorFromPoint(cursor, 2 /* MONITOR_DEFAULTTONEAREST */);
+        var (scale, work) = MonitorAt(cursor);
+        return (cursor, scale, work);
+    }
+
+    /// <summary>The DPI scale and work area (pixels) of the monitor nearest <paramref name="point"/>.</summary>
+    public static (double scale, RECT work) MonitorAt(POINT point)
+    {
+        var monitor = MonitorFromPoint(point, 2 /* MONITOR_DEFAULTTONEAREST */);
         var scale = GetDpiForMonitor(monitor, 0, out var dpi, out _) == 0 ? dpi / 96.0 : 1.0;
         var info = new MONITORINFO { Size = Marshal.SizeOf<MONITORINFO>() };
         GetMonitorInfo(monitor, ref info);
-        return (cursor, scale, info.Work);
+        return (scale, info.Work);
     }
 }

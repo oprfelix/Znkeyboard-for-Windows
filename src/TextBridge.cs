@@ -21,7 +21,14 @@ public static class TextBridge
     {
         var text = await Task.Run(AutomationSelectedText).WaitAsync(TimeSpan.FromMilliseconds(600)).ContinueWith(t => t.IsCompletedSuccessfully ? t.Result : null);
         if (!string.IsNullOrEmpty(text)) return text;
-        return await CopySelectionAsync();
+        // Copying a whole document can take a moment in some apps; a missed Ctrl+C gets one more try.
+        for (var attempt = 1; attempt <= 2; attempt++)
+        {
+            var copied = await CopySelectionAsync();
+            if (!string.IsNullOrEmpty(copied)) return copied;
+            DebugLog.Note($"read: Ctrl+C try {attempt} found nothing");
+        }
+        return null;
     }
 
     /// <summary>
@@ -37,7 +44,7 @@ public static class TextBridge
         var outcome = await Task.WhenAny(check, Task.Delay(1500)) == check ? check.Result : "timeout";
         DebugLog.Note($"replace in {Native.Describe(Native.GetForegroundWindow())}: selection {outcome}");
         var saved = ClipboardSnapshot.Take();
-        if (!TrySetClipboard(() => Clipboard.SetText(text))) return;
+        if (!TrySetClipboard(() => Clipboard.SetDataObject(Borrowed(text), copy: true))) return;
         await ReleaseModifiersAsync();
         Native.SendCtrl(Native.VK_V);
         // The target app reads the clipboard asynchronously; give it time before restoring.
@@ -152,7 +159,7 @@ public static class TextBridge
         var before = Native.GetClipboardSequenceNumber();
         await ReleaseModifiersAsync();
         Native.SendCtrl(Native.VK_C);
-        for (var i = 0; i < 24 && Native.GetClipboardSequenceNumber() == before; i++) await Task.Delay(25);
+        for (var i = 0; i < 40 && Native.GetClipboardSequenceNumber() == before; i++) await Task.Delay(25);
         if (Native.GetClipboardSequenceNumber() == before) return null;
         string? text = null;
         TrySetClipboard(() => text = Clipboard.ContainsText() ? Clipboard.GetText() : null);
@@ -169,6 +176,17 @@ public static class TextBridge
     }
 
     /// <summary>Another app may hold the clipboard open for a moment; try a few times.</summary>
+    /// <summary>The replacement text, kept out of Win+V clipboard history and cloud clipboard: it is only passing through.</summary>
+    private static DataObject Borrowed(string text)
+    {
+        var data = new DataObject();
+        data.SetText(text);
+        data.SetData("ExcludeClipboardContentFromMonitorProcessing", new System.IO.MemoryStream(new byte[] { 0 }));
+        data.SetData("CanIncludeInClipboardHistory", new System.IO.MemoryStream(BitConverter.GetBytes(0)));
+        data.SetData("CanUploadToCloudClipboard", new System.IO.MemoryStream(BitConverter.GetBytes(0)));
+        return data;
+    }
+
     internal static bool TrySetClipboard(Action action)
     {
         for (var attempt = 0; attempt < 5; attempt++)
