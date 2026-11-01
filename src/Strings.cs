@@ -29,8 +29,20 @@ public static class L
     public static string AboutText(string version) => T($"ZnKeyboard for Windows {version}\n选中文字一键润色、翻译，截图翻译。\n\noprfelix.github.io/znkeyboard\nGPL-3.0 开源",
         $"ZnKeyboard for Windows {version}\nPolish or translate selected text, and translate screenshots.\n\noprfelix.github.io/znkeyboard\nOpen source under GPL-3.0");
     public static string UpdateAvailable(string version) => T($"有新版本 {version}", $"ZnKeyboard {version} is available");
-    public static string UpdateAvailableNote(string current) => T($"你正在使用 {current}。下载新版后双击运行，会自动替换旧版本，设置和 API Key 都会保留。\n\n现在打开下载页吗？",
-        $"You have {current}. Download the new version and run it; it replaces this one and keeps your settings and API key.\n\nOpen the download page now?");
+    public static string UpdateAvailableNote(string current) => T($"你正在使用 {current}。点「立即更新」会自动下载并替换，完成后重新启动 ZnKeyboard，设置和 API Key 都会保留。",
+        $"You have {current}. Update Now downloads and installs it, then restarts ZnKeyboard; your settings and API key stay.");
+    public static string UpdateAvailableBalloon => T("点这里立即更新，或右键托盘图标选择「立即更新」。", "Click here to update now, or choose Update Now from the tray menu.");
+    public static string UpdateNow => T("立即更新", "Update Now");
+    public static string NewVersionMenu(string version) => T($"有新版本 {version}，立即更新…", $"Update to {version}…");
+    public static string DownloadingUpdate(string version) => T($"正在下载 ZnKeyboard {version}…", $"Downloading ZnKeyboard {version}…");
+    public static string InstallingUpdate => T("正在安装，完成后会自动重新启动…", "Installing; ZnKeyboard will restart…");
+    public static string UpdateFailed => T("更新没有完成", "The update didn't finish");
+    public static string UpdateFailedNote(string reason) => T($"{reason}\n当前版本没有改动。要打开下载页手动安装吗？", $"{reason}\nNothing was changed. Open the download page to install it yourself?");
+    public static string UpdateDownloadFailed => T("下载失败，请检查网络。", "The download failed. Check your connection.");
+    public static string UpdateDamaged => T("下载的文件不完整或不是 ZnKeyboard，为安全起见没有安装。", "The download was incomplete or not ZnKeyboard, so it wasn't installed.");
+    public static string AutomaticUpdates => T("自动检查更新", "Check for updates automatically");
+    public static string AutomaticUpdatesNote => T("每天检查一次，有新版本时提醒你，点一下即可更新", "Checks once a day and offers new versions; one click installs them");
+    public static string AutoUpdatedNote => T("设置和 API Key 都已保留。", "Your settings and API key were kept.");
     public static string UpToDate(string current) => T($"ZnKeyboard {current} 已是最新版本。", $"ZnKeyboard {current} is up to date.");
     public static string UpdateCheckFailed => T("无法检查更新，请检查网络。\n\n要打开 GitHub 发布页看看吗？", "Couldn't check for updates. Check your connection.\n\nOpen the releases page on GitHub?");
 

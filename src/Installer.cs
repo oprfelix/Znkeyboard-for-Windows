@@ -18,6 +18,9 @@ public static class Installer
 {
     public const string InstalledArg = "--installed";
     public const string UpdatedArg = "--updated";
+    /// <summary>Passed by the in-app updater to the exe it downloaded, and on (as AutoUpdatedArg) to the installed copy.</summary>
+    public const string AutoUpdateArg = "--auto-update";
+    public const string AutoUpdatedArg = "--auto-updated";
     private const string UninstallArg = "--uninstall";
     // Runs where it is, for testing a build without installing it.
     private const string PortableArg = "--portable";
@@ -44,11 +47,11 @@ public static class Installer
         }
         var self = Environment.ProcessPath;
         if (self == null || args.Contains(PortableArg) || SamePath(self, InstalledExe)) return true;
-        return !Install(self);
+        return !Install(self, args.Contains(AutoUpdateArg));
     }
 
     /// <summary>Copies <paramref name="self"/> into place and starts it; false (run from here) when that fails.</summary>
-    private static bool Install(string self)
+    private static bool Install(string self, bool automatic)
     {
         var installedVersion = VersionOf(InstalledExe);
         var current = Version.TryParse(Updates.CurrentVersion, out var v) ? v : new Version(0, 0, 0);
@@ -78,7 +81,7 @@ public static class Installer
             return false;
         }
         DebugLog.Note(fresh ? "installed" : $"updated from {installedVersion}");
-        Start(InstalledExe, fresh ? InstalledArg : UpdatedArg);
+        Start(InstalledExe, fresh ? InstalledArg : automatic ? AutoUpdatedArg : UpdatedArg);
         return true;
     }
 

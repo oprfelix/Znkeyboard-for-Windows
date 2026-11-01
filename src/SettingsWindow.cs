@@ -228,6 +228,14 @@ public sealed class SettingsWindow : FluentWindow
         var update = new Button { Content = L.CheckForUpdates, Icon = new SymbolIcon(SymbolRegular.ArrowDownload24) };
         update.Click += (_, _) => Updates.Check();
         page.Children.Add(Card(SymbolRegular.Info24, L.Version, "ZnKeyboard for Windows " + Updates.CurrentVersion, update));
+
+        var automatic = new ToggleSwitch { IsChecked = settings.AutomaticUpdateChecks };
+        automatic.Click += (_, _) =>
+        {
+            settings.AutomaticUpdateChecks = automatic.IsChecked == true;
+            settings.Save();
+        };
+        page.Children.Add(Card(SymbolRegular.ArrowSync24, L.AutomaticUpdates, L.AutomaticUpdatesNote, automatic));
     }
 
     // ---- AI service helpers ----

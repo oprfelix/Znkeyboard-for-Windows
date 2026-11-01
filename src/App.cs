@@ -21,6 +21,7 @@ public sealed class App : Application
     private SelectionPill? pill;
     private SettingsWindow? settingsWindow;
     private EventWaitHandle? quitSignal;
+    private bool pendingUpdateBalloon;
 
     [STAThread]
     public static void Main(string[] args)
@@ -74,6 +75,21 @@ public sealed class App : Application
 
         if (e.Args.Contains(Installer.InstalledArg)) tray.ShowBalloonTip(5000, L.InstalledTitle, L.InstalledNote, Forms.ToolTipIcon.Info);
         else if (e.Args.Contains(Installer.UpdatedArg)) tray.ShowBalloonTip(5000, L.UpdatedTitle(Updates.CurrentVersion), L.UpdatedNote, Forms.ToolTipIcon.Info);
+        else if (e.Args.Contains(Installer.AutoUpdatedArg)) tray.ShowBalloonTip(5000, L.UpdatedTitle(Updates.CurrentVersion), L.AutoUpdatedNote, Forms.ToolTipIcon.Info);
+
+        // A new version is announced in a tray notification; clicking it installs.
+        Updates.Notify = (title, text) =>
+        {
+            pendingUpdateBalloon = true;
+            tray.ShowBalloonTip(10000, title, text, Forms.ToolTipIcon.Info);
+        };
+        tray.BalloonTipClicked += (_, _) =>
+        {
+            if (pendingUpdateBalloon && Updates.Available is { } release) Updates.Install(release);
+            pendingUpdateBalloon = false;
+        };
+        tray.BalloonTipClosed += (_, _) => pendingUpdateBalloon = false;
+        Updates.StartAutomaticChecks();
 
         // First run: nothing works without a key, so start where it goes.
         if (string.IsNullOrEmpty(Credentials.Read(Settings.Current.Provider))) ShowSettings();
@@ -133,6 +149,11 @@ public sealed class App : Application
         var menu = tray!.ContextMenuStrip!;
         menu.Items.Clear();
         var settings = Settings.Current;
+        if (Updates.Available is { } release)
+        {
+            menu.Items.Add(Item(L.NewVersionMenu(release.Version), '\uE896', () => Updates.Install(release)));
+            menu.Items.Add(new Forms.ToolStripSeparator());
+        }
         menu.Items.Add(Item(L.PolishSelection, '', () => RunFromMenu(ShortcutAction.Polish), settings.ShortcutFor(ShortcutAction.Polish)));
         menu.Items.Add(Item(L.TranslateTo(settings.Target), '', () => RunFromMenu(ShortcutAction.Translate), settings.ShortcutFor(ShortcutAction.Translate)));
         menu.Items.Add(Item(L.ScreenshotTranslate, '', () => RunFromMenu(ShortcutAction.Screenshot), settings.ShortcutFor(ShortcutAction.Screenshot)));

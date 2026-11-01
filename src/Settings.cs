@@ -72,6 +72,11 @@ public sealed class Settings
     public string UiLanguage { get; set; } = "system";
     /// <summary>The 润色 | AI 翻译为 pill on selected text. On by default.</summary>
     public bool SelectionPill { get; set; } = true;
+    /// <summary>A daily look for a new release. On by default.</summary>
+    public bool AutomaticUpdateChecks { get; set; } = true;
+    public DateTime LastUpdateCheck { get; set; }
+    /// <summary>The newest version already announced, so each is announced once.</summary>
+    public string? NotifiedUpdate { get; set; }
     public Shortcut? PolishShortcut { get; set; }
     public Shortcut? TranslateShortcut { get; set; }
     public Shortcut? ScreenshotShortcut { get; set; }
