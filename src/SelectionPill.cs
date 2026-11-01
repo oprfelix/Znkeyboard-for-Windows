@@ -38,8 +38,12 @@ public sealed class SelectionPill : IDisposable
     private readonly IntPtr mouseHook, keyboardHook;
     private readonly DispatcherTimer watch = new() { Interval = TimeSpan.FromMilliseconds(300) };
     private Native.POINT downPoint;
-    private uint lastUpTime;
-    private Native.POINT lastUpPoint;
+    // Windows skips a low-level hook when the UI thread is too busy to answer in time, so a button
+    // up can arrive without its down; it is then measured against nothing and ignored.
+    private bool pressed;
+    private bool pressedOnOwnWindow;
+    private uint lastClickTime;
+    private Native.POINT lastClickPoint;
     private IntPtr sourceWindow;
     private int checkGeneration;
 
@@ -138,7 +142,10 @@ public sealed class SelectionPill : IDisposable
             if (message is Native.WM_LBUTTONDOWN or Native.WM_LBUTTONUP)
             {
                 var data = Marshal.PtrToStructure<Native.MSLLHOOKSTRUCT>(lParam);
-                window.Dispatcher.BeginInvoke(() => OnMouse(message == Native.WM_LBUTTONDOWN, data.Point, data.Time));
+                // Whose window it is must be asked now: by the time OnMouse runs, a click may already
+                // have hidden the pill and uncovered the app below.
+                var own = Native.IsOwnWindowAt(data.Point);
+                window.Dispatcher.BeginInvoke(() => OnMouse(message == Native.WM_LBUTTONDOWN, data.Point, data.Time, own));
             }
         }
         return Native.CallNextHookEx(mouseHook, code, wParam, lParam);
@@ -155,30 +162,47 @@ public sealed class SelectionPill : IDisposable
         return Native.CallNextHookEx(keyboardHook, code, wParam, lParam);
     }
 
-    private void OnMouse(bool down, Native.POINT point, uint time)
+    private void OnMouse(bool down, Native.POINT point, uint time, bool own)
     {
-        // Clicks on the pill, its language list or the result card are ours to handle.
-        if (Native.IsOwnWindowAt(point)) return;
         if (down)
         {
+            pressed = true;
+            pressedOnOwnWindow = own;
             downPoint = point;
-            Hide();
+            // Clicks on the pill, its language list or the result card are ours to handle.
+            if (!own) Hide();
             return;
         }
+        if (!pressed)
+        {
+            DebugLog.Note("mouse up without its down (hook skipped), ignored");
+            return;
+        }
+        pressed = false;
+        // A press that started or ended on one of ours (the pill, the card, settings) selects nothing elsewhere.
+        if (own || pressedOnOwnWindow) return;
         // Hook points are physical pixels; measure in DIPs so a click that wobbles a few pixels on a
         // high-DPI screen or a touchpad isn't taken for a drag.
         var scale = Native.ScaleAt(point);
         var moved = Math.Max(Math.Abs(point.X - downPoint.X), Math.Abs(point.Y - downPoint.Y)) / scale;
         var dragged = moved >= DragDistance;
-        var multiClick = time - lastUpTime <= Native.GetDoubleClickTime()
-            && Math.Max(Math.Abs(point.X - lastUpPoint.X), Math.Abs(point.Y - lastUpPoint.Y)) / scale <= 4;
-        lastUpTime = time;
-        lastUpPoint = point;
+        // A double or triple click: plain clicks (not drags) close together in time and place.
+        var multiClick = !dragged && time - lastClickTime <= Native.GetDoubleClickTime()
+            && Math.Max(Math.Abs(point.X - lastClickPoint.X), Math.Abs(point.Y - lastClickPoint.Y)) / scale <= 4;
+        if (dragged)
+        {
+            lastClickTime = 0;
+        }
+        else
+        {
+            lastClickTime = time;
+            lastClickPoint = point;
+        }
         if (dragged || multiClick)
         {
             DebugLog.Note($"mouse {(dragged ? $"drag {moved:F0} dip" : "multi-click")} in {Native.Describe(Native.GetForegroundWindow())}");
             // Where the app can't say whether text is selected, only a gesture that clearly selects counts.
-            Check(point, trustGesture: multiClick || moved >= SureDragDistance);
+            Check(point, downPoint, trustGesture: multiClick || moved >= SureDragDistance);
         }
     }
 
@@ -197,7 +221,7 @@ public sealed class SelectionPill : IDisposable
         if (ctrlA || shiftExtend)
         {
             DebugLog.Note($"key {(ctrlA ? "Ctrl+A" : "Shift+move")} in {Native.Describe(Native.GetForegroundWindow())}");
-            Check(null);
+            Check(null, null);
         }
     }
 
@@ -208,9 +232,11 @@ public sealed class SelectionPill : IDisposable
 
     /// <summary>
     /// After the app has updated its selection, show the pill if there is one in an editable field.
-    /// [trustGesture]: show it at the pointer even when the app can't report a selection.
+    /// [pointer], [pressedAt]: where a mouse selection ended and began; the field must be under one of them.
+    /// [trustGesture]: show it at the pointer when the field can't report a selection.
+    /// Anything uncertain (no answer in time, an error, focus elsewhere) shows nothing.
     /// </summary>
-    private async void Check(Native.POINT? pointer, bool trustGesture = false)
+    private async void Check(Native.POINT? pointer, Native.POINT? pressedAt, bool trustGesture = false)
     {
         if (!Settings.Current.SelectionPill || IsSuspended())
         {
@@ -222,14 +248,15 @@ public sealed class SelectionPill : IDisposable
         var generation = ++checkGeneration;
         await Task.Delay(150);
         var started = DateTime.Now;
-        var inspect = Task.Run(TextBridge.InspectFocusedSelection);
-        // UI Automation can be slow the first time, or in big documents. A mouse gesture is trusted
-        // when it can't answer in time; a keyboard one needs the selection's position, so it waits.
+        var points = new[] { pointer, pressedAt }.OfType<Native.POINT>().ToArray();
+        var inspect = Task.Run(() => TextBridge.InspectFocusedSelection(points));
+        // UI Automation can be slow the first time, or in big documents. No answer in time means no
+        // pill: a double click on a file or a drag of a title bar looks the same from here.
         var answered = await Task.WhenAny(inspect, Task.Delay(1200)) == inspect;
         if (generation != checkGeneration) return;
-        var (state, end) = answered ? inspect.Result : (TextBridge.SelectionState.Unknown, (Rect?)null);
+        var (state, end) = answered ? inspect.Result : (TextBridge.SelectionState.Failed, (Rect?)null);
         DebugLog.Note($"  selection {state}{(answered ? "" : " (timed out)")} after {(DateTime.Now - started).TotalMilliseconds:F0} ms, position {(end.HasValue ? "known" : "unknown")}");
-        // Mouse selections in some apps report no selection at all; trust the gesture there.
+        // Editable fields that report no selection at all: trust a clear mouse gesture there.
         var show = state == TextBridge.SelectionState.Selected || (state == TextBridge.SelectionState.Unknown && pointer != null && trustGesture);
         if (!show || IsSuspended()) return;
 

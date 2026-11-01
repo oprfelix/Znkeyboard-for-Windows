@@ -45,14 +45,20 @@ public static class TextBridge
         saved.Restore();
     }
 
-    public enum SelectionState { NotEditable, Empty, Selected, Unknown }
+    /// <summary>
+    /// Unknown: an editable field that can't report its selection. Elsewhere: the focused field isn't
+    /// where the mouse selected (an old selection, while the user dragged a scrollbar or title bar).
+    /// Failed: the app couldn't be asked (it errored, or focus moved mid-way).
+    /// </summary>
+    public enum SelectionState { NotEditable, Empty, Selected, Unknown, Elsewhere, Failed }
 
     /// <summary>
     /// Whether the focused element in another app is an editable text box with a selection, and
     /// where the selection ends on screen (device pixels) when the app reports it. Blocking; call
     /// off the UI thread.
     /// </summary>
-    public static (SelectionState state, Rect? end) InspectFocusedSelection()
+    /// <param name="mousePoints">Where a mouse selection began and ended (device pixels); empty for the keyboard.</param>
+    internal static (SelectionState state, Rect? end) InspectFocusedSelection(Native.POINT[] mousePoints)
     {
         try
         {
@@ -63,6 +69,17 @@ public static class TextBridge
                 DebugLog.Note($"  focused {focused.Current.ControlType.ProgrammaticName} '{focused.Current.ClassName}' is not editable");
                 return (SelectionState.NotEditable, null);
             }
+            if (mousePoints.Length > 0)
+            {
+                // Device pixels, like the hook's points (the app is per-monitor DPI aware).
+                var bounds = focused.Current.BoundingRectangle;
+                if (!bounds.IsEmpty) bounds.Inflate(4, 4);
+                if (!bounds.IsEmpty && !mousePoints.Any(p => bounds.Contains(p.X, p.Y)))
+                {
+                    DebugLog.Note($"  focused '{focused.Current.ClassName}' is not under the pointer");
+                    return (SelectionState.Elsewhere, null);
+                }
+            }
             if (!focused.TryGetCurrentPattern(TextPattern.Pattern, out var pattern)) return (SelectionState.Unknown, null);
             var ranges = ((TextPattern)pattern).GetSelection();
             if (ranges.Length == 0) return (SelectionState.Unknown, null);
@@ -71,9 +88,10 @@ public static class TextBridge
             var rects = ranges[^1].GetBoundingRectangles();
             return (SelectionState.Selected, rects.Length > 0 ? rects[^1] : null);
         }
-        catch (Exception)
+        catch (Exception e)
         {
-            return (SelectionState.Unknown, null);
+            DebugLog.Note($"  inspecting the selection failed: {e.GetType().Name}");
+            return (SelectionState.Failed, null);
         }
     }
 
