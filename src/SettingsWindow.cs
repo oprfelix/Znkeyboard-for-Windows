@@ -38,6 +38,7 @@ public sealed class SettingsWindow : FluentWindow
     private readonly System.Windows.Threading.DispatcherTimer keySaveTimer = new() { Interval = TimeSpan.FromMilliseconds(600) };
     /// <summary>Saves the key field of the current build of the page.</summary>
     private Action? keySaveTick;
+    private TextBox? baseUrlBox;
 
     public SettingsWindow(App app)
     {
@@ -71,6 +72,12 @@ public sealed class SettingsWindow : FluentWindow
         Content = root;
 
         Loaded += (_, _) => SystemThemeWatcher.Watch(this, WindowBackdropType.Mica, true);
+        // Closing doesn't move focus, so a key, address or model still being typed is saved here.
+        Closing += (_, _) =>
+        {
+            SaveFields();
+            modelLoad?.Cancel();
+        };
         Build();
     }
 
@@ -84,10 +91,12 @@ public sealed class SettingsWindow : FluentWindow
         nav.Children.Add(NavItem(Page.Shortcuts, SymbolRegular.Keyboard24, L.ShortcutsSection));
         nav.Children.Add(NavItem(Page.General, SymbolRegular.Settings24, L.GeneralSection));
 
-        keySaveTimer.Stop();
+        // Clicking the navigation doesn't move focus either: save what the old page was typing.
+        SaveFields();
         keySaveTick = null;
         keyStatus = null;
         modelBox = null;
+        baseUrlBox = null;
         page.Children.Clear();
         switch (current)
         {
@@ -101,6 +110,21 @@ public sealed class SettingsWindow : FluentWindow
 
     private void Rebuild() => Dispatcher.BeginInvoke(Build);
 
+    /// <summary>Saves the key, address and model fields, which otherwise save when they lose focus.</summary>
+    private void SaveFields()
+    {
+        if (keySaveTimer.IsEnabled) keySaveTick?.Invoke();
+        keySaveTimer.Stop();
+        var settings = Settings.Current;
+        if (baseUrlBox != null && baseUrlBox.Text.Trim() != settings.OpenAIBaseUrl)
+        {
+            settings.OpenAIBaseUrl = baseUrlBox.Text.Trim();
+            settings.Save();
+        }
+        // Only the OpenAI-compatible model is typed; after a provider switch the box belongs to the old one.
+        if (modelBox is { IsEditable: true } box && settings.Provider == Provider.OpenAICompatible && box.Text.Trim() != settings.OpenAIModel) SaveModel(box.Text);
+    }
+
     // ---- Pages ----
 
     private void BuildAi()
@@ -111,6 +135,7 @@ public sealed class SettingsWindow : FluentWindow
         var provider = Combo(new[] { "Google Gemini", L.OpenAICompatible }, (int)settings.Provider);
         provider.SelectionChanged += (_, _) =>
         {
+            SaveFields();
             settings.Provider = (Provider)provider.SelectedIndex;
             settings.Save();
             Rebuild();
@@ -122,6 +147,7 @@ public sealed class SettingsWindow : FluentWindow
             var preset = Combo(new[] { "DeepSeek", L.CustomPreset }, (int)settings.EffectivePreset);
             preset.SelectionChanged += (_, _) =>
             {
+                SaveFields();
                 settings.Preset = (ApiPreset)preset.SelectedIndex;
                 // A model typed for another service would not exist on DeepSeek.
                 if (settings.Preset == ApiPreset.DeepSeek && !settings.OpenAIModel.StartsWith("deepseek", StringComparison.OrdinalIgnoreCase))
@@ -135,6 +161,7 @@ public sealed class SettingsWindow : FluentWindow
         if (settings.Provider == Provider.OpenAICompatible && settings.EffectivePreset == ApiPreset.Custom)
         {
             var baseUrl = new TextBox { Text = settings.OpenAIBaseUrl, Width = 320, PlaceholderText = "https://" };
+            baseUrlBox = baseUrl;
             baseUrl.LostFocus += (_, _) => { settings.OpenAIBaseUrl = baseUrl.Text.Trim(); settings.Save(); LoadModels(); };
             page.Children.Add(Card(SymbolRegular.Globe24, L.ApiBaseUrl, L.ApiBaseUrlNote, baseUrl));
         }
@@ -142,12 +169,14 @@ public sealed class SettingsWindow : FluentWindow
         // The key saves itself shortly after typing or pasting stops, then gets checked.
         var key = new PasswordBox { Password = Credentials.Read(settings.Provider) ?? "", Width = 320, PlaceholderText = L.ApiKey };
         keyStatus = new TextBlock { FontSize = 12, Margin = new Thickness(2, 6, 0, 0), TextWrapping = TextWrapping.Wrap, MaxWidth = 320 };
+        // The provider this field was built for: a key must never be filed under the next one.
+        var keyProvider = settings.Provider;
         void SaveKey()
         {
             keySaveTimer.Stop();
-            if (key.Password.Trim() == (Credentials.Read(settings.Provider) ?? "")) return;
-            Credentials.Write(settings.Provider, key.Password);
-            LoadModels();
+            if (key.Password.Trim() == (Credentials.Read(keyProvider) ?? "")) return;
+            Credentials.Write(keyProvider, key.Password);
+            if (settings.Provider == keyProvider) LoadModels();
         }
         keySaveTick = SaveKey;
         key.PasswordChanged += (_, _) => { keySaveTimer.Stop(); keySaveTimer.Start(); };

@@ -81,11 +81,18 @@ public sealed class Settings
     public Shortcut? TranslateShortcut { get; set; }
     public Shortcut? ScreenshotShortcut { get; set; }
 
-    public static Settings Current { get; private set; } = Load();
-
+    // Static fields initialise in the order they are written, so the paths must come before Current:
+    // until 0.6.0 Load() ran while FilePath was still null, never read the file, and the next Save()
+    // wrote the defaults over it.
     private static readonly string Folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ZnKeyboard");
     public static string FolderPath => Folder;
     private static readonly string FilePath = Path.Combine(Folder, "settings.json");
+    // The previous good copy, kept by each save.
+    private static readonly string BackupPath = FilePath + ".bak";
+    private static readonly object Gate = new();
+    private static readonly JsonSerializerOptions Format = new() { WriteIndented = true };
+
+    public static Settings Current { get; private set; } = Load();
 
     private static Settings Load()
     {
@@ -93,21 +100,67 @@ public sealed class Settings
         // provider with no address or model, so those load as DeepSeek through the defaults; only
         // the key needs to move back.
         Credentials.MoveDeepSeekKey();
-        try
+        var settings = Read(FilePath) ?? Read(BackupPath);
+        if (settings == null)
         {
-            if (File.Exists(FilePath)) return JsonSerializer.Deserialize<Settings>(File.ReadAllText(FilePath)) ?? new Settings();
+            settings = new Settings();
+            // Settings lost before 0.6.1 still have their key: pick the provider it belongs to.
+            if (string.IsNullOrEmpty(Credentials.Read(Provider.Gemini)) && !string.IsNullOrEmpty(Credentials.Read(Provider.OpenAICompatible)))
+                settings.Provider = Provider.OpenAICompatible;
         }
-        catch (Exception)
-        {
-            // A damaged file falls back to defaults rather than keeping the app from starting.
-        }
-        return new Settings();
+        // A file edited by hand, or written by another version, may leave these out or null.
+        settings.OpenAIBaseUrl ??= DefaultOpenAIBaseUrl;
+        settings.GeminiModel ??= DefaultGeminiModel;
+        settings.OpenAIModel ??= DefaultOpenAIModel;
+        settings.TranslateTarget ??= "EN";
+        settings.ScreenshotTarget ??= "ZH";
+        settings.UiLanguage ??= "system";
+        if (!Enum.IsDefined(settings.Provider)) settings.Provider = Provider.Gemini;
+        return settings;
     }
 
+    /// <summary>The settings in <paramref name="path"/>, or null when it is missing or damaged (then copied aside for the log).</summary>
+    private static Settings? Read(string path)
+    {
+        try
+        {
+            if (!File.Exists(path)) return null;
+            return JsonSerializer.Deserialize<Settings>(File.ReadAllText(path));
+        }
+        catch (Exception error)
+        {
+            DebugLog.Note($"settings unreadable ({Path.GetFileName(path)}): {error.GetType().Name}");
+            try { File.Copy(path, path + ".damaged", overwrite: true); } catch (Exception) { }
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Writes a temporary file through to disk, then swaps it in and keeps the previous copy as
+    /// settings.json.bak, so a crash, power cut or update mid-save leaves whole settings, never half a file.
+    /// </summary>
     public void Save()
     {
-        Directory.CreateDirectory(Folder);
-        File.WriteAllText(FilePath, JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true }));
+        lock (Gate)
+        {
+            try
+            {
+                Directory.CreateDirectory(Folder);
+                var temp = FilePath + ".tmp";
+                using (var file = new FileStream(temp, FileMode.Create, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough))
+                {
+                    JsonSerializer.Serialize(file, this, Format);
+                    file.Flush(flushToDisk: true);
+                }
+                if (File.Exists(FilePath)) File.Replace(temp, FilePath, BackupPath, ignoreMetadataErrors: true);
+                else File.Move(temp, FilePath);
+            }
+            catch (Exception error)
+            {
+                // Still in memory; the next save tries again. A file held by antivirus must not crash the tray app.
+                DebugLog.Note($"settings not saved: {error.GetType().Name}: {error.Message}");
+            }
+        }
     }
 
     public TranslateLanguage Target => Languages.ByCode(TranslateTarget);
@@ -264,7 +317,7 @@ public static class Credentials
                 Persist = CredPersistLocalMachine,
                 UserName = Environment.UserName,
             };
-            CredWrite(ref credential, 0);
+            if (!CredWrite(ref credential, 0)) DebugLog.Note($"key not saved: Win32 error {Marshal.GetLastWin32Error()}");
         }
         finally
         {
