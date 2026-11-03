@@ -88,6 +88,8 @@ public static class L
     public static string KeyRejected => T("API Key 无效或没有权限，请在设置里检查。", "The API key was rejected. Check it in Settings.");
     public static string RegionUnsupported => T("Gemini 在你所在的地区不可用。请在设置里改用 OpenAI 兼容（DeepSeek），或通过代理网络使用 Gemini。",
         "Gemini isn't available in your region. Switch to OpenAI compatible (DeepSeek) in Settings, or reach Gemini through a proxy.");
+    public static string ProviderBusy(int code) => T($"AI 服务商暂时繁忙（{code}），自动重试后仍未成功。请稍后再试，或在设置里换用其他服务商。",
+        $"The AI provider is busy right now ({code}) and still didn't answer after a few tries. Try again shortly, or switch providers in Settings.");
     public static string RequestRejected(int code, string? reason) => reason == null
         ? T($"服务商拒绝了请求（{code}）。", $"The provider rejected the request ({code}).")
         : T($"服务商拒绝了请求（{code}）：{reason}", $"The provider rejected the request ({code}): {reason}");

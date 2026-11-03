@@ -38,6 +38,7 @@ public sealed class RewriteException(RewriteFailure failure, int status = 0, str
         RewriteFailure.TooLong => L.TooLong,
         RewriteFailure.NoChange => L.NoChange,
         RewriteFailure.Http when Status is 401 or 403 => L.KeyRejected,
+        RewriteFailure.Http when IsBusy(Status) => L.ProviderBusy(Status),
         RewriteFailure.Http when ProviderMessage(Body) is { } reason && reason.Contains("location is not supported", StringComparison.OrdinalIgnoreCase)
             => L.RegionUnsupported,
         RewriteFailure.Http => L.RequestRejected(Status, ProviderMessage(Body)),
@@ -64,6 +65,9 @@ public sealed class RewriteException(RewriteFailure failure, int status = 0, str
             return text.Length == 0 ? null : text;
         }
     }
+
+    /// <summary>Too many requests, or the server failing or overloaded (DeepSeek's 503 "Service is too busy"): worth trying again.</summary>
+    public static bool IsBusy(int status) => status is 429 or >= 500;
 
     /// <summary>Key, model or endpoint problems are fixed in Settings.</summary>
     public bool FixableInSettings => Failure is RewriteFailure.MissingKey or RewriteFailure.BadEndpoint
@@ -114,12 +118,35 @@ public sealed class AIClient
         if (text.Length > MaxSourceCharacters) throw new RewriteException(RewriteFailure.TooLong);
         try
         {
-            return await RequestAsync(text, mode, strictSchema: true, cancel);
+            return await WithRetriesAsync(() => RequestAsync(text, mode, strictSchema: true, cancel), cancel);
         }
         catch (RewriteException e) when (e.Failure == RewriteFailure.Http && e.Status is 400 or 404 or 422 && MentionsSchema(e.Body))
         {
             // Some servers (DeepSeek, older OpenAI-compatible ones) only take plain JSON mode.
-            return await RequestAsync(text, mode, strictSchema: false, cancel);
+            return await WithRetriesAsync(() => RequestAsync(text, mode, strictSchema: false, cancel), cancel);
+        }
+    }
+
+    /// <summary>Waits before each further try when the provider is busy; two more tries in all.</summary>
+    private static readonly TimeSpan[] RetryDelays = [TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(3)];
+
+    /// <summary>
+    /// Runs <paramref name="request"/>, trying again after a short wait when the provider answers busy
+    /// (429, 5xx): those pass within seconds, so the user rarely sees them. Anything else fails at once.
+    /// </summary>
+    private async Task<string> WithRetriesAsync(Func<Task<string>> request, CancellationToken cancel)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                return await request();
+            }
+            catch (RewriteException e) when (e.Failure == RewriteFailure.Http && RewriteException.IsBusy(e.Status) && attempt < RetryDelays.Length)
+            {
+                DebugLog.Note($"{Provider} {Model}: HTTP {e.Status}, trying again in {RetryDelays[attempt].TotalSeconds:0} s");
+                await Task.Delay(RetryDelays[attempt], cancel);
+            }
         }
     }
 
