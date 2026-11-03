@@ -134,7 +134,16 @@ public sealed class ReviewWindow : Window
         {
             if (!updatingLanguage && language.SelectedIndex >= 0) OnLanguageChange(Languages.All[language.SelectedIndex]);
         };
-        card.MouseLeftButtonDown += (_, e) => { if (e.OriginalSource is Border or StackPanel or DockPanel or Grid) DragMove(); };
+        card.MouseLeftButtonDown += (_, e) =>
+        {
+            if (e.OriginalSource is not (Border or StackPanel or DockPanel or Grid)) return;
+            DragMove();
+            // Where the user put it: grow downward from there, and stay inside that monitor (the pointer's).
+            var (_, scale, work) = Native.CursorAndMonitor();
+            workArea = new Rect(work.Left / scale, work.Top / scale, (work.Right - work.Left) / scale, (work.Bottom - work.Top) / scale);
+            growsUp = false;
+            KeepOnScreen();
+        };
         SourceInitialized += (_, _) =>
         {
             var handle = new WindowInteropHelper(this).Handle;
@@ -453,11 +462,13 @@ public sealed class ReviewWindow : Window
         KeepOnScreen();
     }
 
+    /// <summary>Inside the work area on every side, keeping the bottom edge where it was when the card opened upward.</summary>
     private void KeepOnScreen()
     {
         if (workArea.IsEmpty) return;
         var height = ActualHeight > 0 ? ActualHeight : 200;
         if (growsUp) Top = bottomEdge - height;
         Top = Math.Max(Math.Min(Top, workArea.Bottom - height - 8), workArea.Top);
+        Left = Math.Max(Math.Min(Left, workArea.Right - Width), workArea.Left);
     }
 }

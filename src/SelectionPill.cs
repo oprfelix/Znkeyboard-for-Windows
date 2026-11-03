@@ -295,11 +295,33 @@ public sealed class SelectionPill : IDisposable
             ? $"{L.ReadShort} {target.DisplayName}  {settings.ShortcutFor(ShortcutAction.Read).Display}"
             : $"{L.TranslateShort} {target.DisplayName}  {settings.ShortcutFor(ShortcutAction.Translate).Display}";
         var scale = Native.ScaleAt(anchor);
+        // Roughly in place first, so it opens on the right monitor; Place keeps it on screen once its size is known.
         window.Left = anchor.X / scale - 4;
         window.Top = anchor.Y / scale + 2;
         window.Show();
+        Place(anchor);
         watch.Start();
         DebugLog.Note($"  pill shown at {anchor.X},{anchor.Y} (scale {scale:F2})");
+    }
+
+    /// <summary>Room left above the anchor when the pill flips up, so it doesn't cover the selected line.</summary>
+    private const double LineClearance = 24;
+
+    /// <summary>
+    /// Below and right of <paramref name="anchor"/> (device pixels), or above it near the bottom of the
+    /// screen; always inside the work area of the monitor it is on, whichever edge it is near.
+    /// </summary>
+    private void Place(Native.POINT anchor)
+    {
+        var (scale, work) = Native.MonitorAt(anchor);
+        window.UpdateLayout();
+        double width = window.ActualWidth, height = window.ActualHeight;
+        double left = work.Left / scale, top = work.Top / scale, right = work.Right / scale, bottom = work.Bottom / scale;
+        var x = anchor.X / scale - 4;
+        var y = anchor.Y / scale + 2;
+        if (y + height > bottom) y = anchor.Y / scale - height - LineClearance;
+        window.Left = Math.Max(left, Math.Min(x, right - width));
+        window.Top = Math.Max(top, Math.Min(y, bottom - height));
     }
 
     private void ChooseLanguage()
