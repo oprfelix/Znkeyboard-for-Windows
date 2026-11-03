@@ -18,10 +18,10 @@ namespace ZnKeyboard;
 
 /// <summary>
 /// The Fluent card near the pointer: working, then the result (Enter replaces, Esc closes, Ctrl+C
-/// copies) or an error. For screenshot translation it shows the recognised text above the
-/// translation, and Enter copies instead. It never takes focus: the app with the selection keeps
-/// it, so the selection is still there to be replaced. Its keys come from a keyboard hook while it
-/// is shown; a click anywhere else closes it.
+/// copies) or an error. Translations to read (text selected while reading, or a screenshot, whose
+/// recognised text shows above) copy on Enter instead, and have a pin. It never takes focus: the
+/// app with the selection keeps it, so the selection is still there to be replaced. Its keys come
+/// from a keyboard hook while it is shown; a click anywhere else closes it, unless it is pinned.
 /// </summary>
 public sealed class ReviewWindow : Window
 {
@@ -43,6 +43,11 @@ public sealed class ReviewWindow : Window
     private RewriteMode mode = RewriteMode.Polish;
     private string? result;
     private string? original;
+    private readonly Button pin;
+    /// <summary>A translation to read is showing, which the pin can keep open.</summary>
+    private bool pinnable;
+    /// <summary>Pinned and clicked away from: the keyboard is the other app's again.</summary>
+    private bool keysReleased;
     private Native.HookProc? keyboardProc, mouseProc; // Kept alive while the hooks use them.
     private IntPtr keyboardHook, mouseHook;
 
@@ -52,6 +57,9 @@ public sealed class ReviewWindow : Window
     public Action<TranslateLanguage> OnLanguageChange { get; set; } = _ => { };
     /// <summary>Run the same text again (↻, or Try Again after an error).</summary>
     public Action OnRetry { get; set; } = () => { };
+
+    /// <summary>Clicks elsewhere leave it open: a translation to read, with the pin on (remembered).</summary>
+    public bool StaysOpen => pinnable && Settings.Current.PinTranslationCard;
 
     public ReviewWindow()
     {
@@ -78,9 +86,25 @@ public sealed class ReviewWindow : Window
             VerticalAlignment = VerticalAlignment.Center,
         };
         close.Click += (_, _) => Close(clearResult: true);
+        pin = new Button
+        {
+            Icon = new SymbolIcon(SymbolRegular.Pin16),
+            Appearance = ControlAppearance.Transparent,
+            Padding = new Thickness(6),
+            Margin = new Thickness(0, 0, 2, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        pin.Click += (_, _) =>
+        {
+            Settings.Current.PinTranslationCard = !Settings.Current.PinTranslationCard;
+            Settings.Current.Save();
+            UpdatePin();
+        };
         var header = new DockPanel { Margin = new Thickness(0, 0, 0, 12), LastChildFill = false };
         DockPanel.SetDock(close, Dock.Right);
+        DockPanel.SetDock(pin, Dock.Right);
         header.Children.Add(close);
+        header.Children.Add(pin);
         header.Children.Add(icon);
         header.Children.Add(title);
         header.Children.Add(language);
@@ -140,7 +164,7 @@ public sealed class ReviewWindow : Window
     /// <summary>Takes Enter, Esc and Ctrl+C for the card (so they don't reach the app); lets everything else through.</summary>
     private IntPtr KeyboardHook(int code, IntPtr wParam, IntPtr lParam)
     {
-        if (code >= 0 && wParam.ToInt32() is Native.WM_KEYDOWN or Native.WM_SYSKEYDOWN)
+        if (code >= 0 && !keysReleased && wParam.ToInt32() is Native.WM_KEYDOWN or Native.WM_SYSKEYDOWN)
         {
             var vk = Marshal.PtrToStructure<Native.KBDLLHOOKSTRUCT>(lParam).VkCode;
             var hasResult = result != null;
@@ -163,13 +187,20 @@ public sealed class ReviewWindow : Window
         return Native.CallNextHookEx(keyboardHook, code, wParam, lParam);
     }
 
-    /// <summary>A click outside the card (and its language list) closes it; clicking into the text would move the selection anyway.</summary>
+    /// <summary>
+    /// A click outside the card (and its language list) closes it; clicking into the text would move
+    /// the selection anyway. A pinned card stays, and stops taking Enter, Esc and Ctrl+C from the app clicked.
+    /// </summary>
     private IntPtr MouseHook(int code, IntPtr wParam, IntPtr lParam)
     {
         if (code >= 0 && wParam.ToInt32() is Native.WM_LBUTTONDOWN or 0x204 /* WM_RBUTTONDOWN */)
         {
             var point = Marshal.PtrToStructure<Native.MSLLHOOKSTRUCT>(lParam).Point;
-            if (!Native.IsOwnWindowAt(point)) Dispatcher.BeginInvoke(() => Close(clearResult: true));
+            if (!Native.IsOwnWindowAt(point))
+            {
+                if (StaysOpen) keysReleased = true;
+                else Dispatcher.BeginInvoke(() => Close(clearResult: true));
+            }
         }
         return Native.CallNextHookEx(mouseHook, code, wParam, lParam);
     }
@@ -180,9 +211,12 @@ public sealed class ReviewWindow : Window
         mode = next;
         result = null;
         original = null;
+        pinnable = next.IsRead;
+        keysReleased = false;
+        UpdatePin();
         var target = next.Target;
-        icon.Symbol = next.IsRead ? SymbolRegular.ScanText24 : target == null ? SymbolRegular.Sparkle24 : SymbolRegular.Translate24;
-        title.Text = next.IsRead ? L.ScreenshotTranslateTo : target == null ? L.Polish : L.TranslateShort;
+        icon.Symbol = next.FromScreenshot ? SymbolRegular.ScanText24 : target == null ? SymbolRegular.Sparkle24 : SymbolRegular.Translate24;
+        title.Text = next.FromScreenshot ? L.ScreenshotTranslateTo : next.IsRead ? L.ReadShort : target == null ? L.Polish : L.TranslateShort;
         updatingLanguage = true;
         language.Visibility = target == null ? Visibility.Collapsed : Visibility.Visible;
         language.ItemsSource = Languages.All.Select(l => l.Label).ToList();
@@ -218,7 +252,7 @@ public sealed class ReviewWindow : Window
         rightButtons.Children.Clear();
         if (mode.IsRead)
         {
-            leftButtons.Children.Add(TextButton(L.CopyOriginal, SymbolRegular.TextQuote20, () => CopyAndClose(original)));
+            if (recognised != null) leftButtons.Children.Add(TextButton(L.CopyOriginal, SymbolRegular.TextQuote20, () => CopyAndClose(original)));
             leftButtons.Children.Add(IconButton(SymbolRegular.ArrowClockwise20, L.Regenerate, () => OnRetry()));
             rightButtons.Children.Add(PrimaryButton(L.CopyTranslation + "   ↵", Primary));
         }
@@ -234,6 +268,10 @@ public sealed class ReviewWindow : Window
     public void ShowError(string message, bool offerSettings, bool canRetry = false)
     {
         result = null;
+        // An error isn't worth keeping on screen.
+        pinnable = false;
+        keysReleased = false;
+        UpdatePin();
         language.IsEnabled = true;
         body.Children.Clear();
         var warning = new SymbolIcon(SymbolRegular.Warning20) { FontSize = 18, Margin = new Thickness(0, 1, 10, 0), VerticalAlignment = VerticalAlignment.Top };
@@ -250,6 +288,22 @@ public sealed class ReviewWindow : Window
         if (canRetry) rightButtons.Children.Add(TextButton(L.Retry, SymbolRegular.ArrowClockwise20, () => OnRetry()));
         if (offerSettings) rightButtons.Children.Add(PrimaryButton(L.OpenSettings, () => { Close(clearResult: true); OnOpenSettings(); }));
         Appear();
+    }
+
+    /// <summary>The pin shows on translations to read, filled and in the accent colour while on.</summary>
+    private void UpdatePin()
+    {
+        var on = Settings.Current.PinTranslationCard;
+        pin.Visibility = pinnable ? Visibility.Visible : Visibility.Collapsed;
+        pin.ToolTip = on ? L.UnpinCard : L.PinCard;
+        if (pin.Icon is SymbolIcon symbol)
+        {
+            symbol.Filled = on;
+            if (on) symbol.SetResourceReference(ForegroundProperty, "AccentTextFillColorPrimaryBrush");
+            else symbol.ClearValue(ForegroundProperty);
+        }
+        // Unpinned after clicking away: the next click elsewhere closes it, and keys are the card's until then.
+        if (!on) keysReleased = false;
     }
 
     public void Close(bool clearResult)

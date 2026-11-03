@@ -13,13 +13,13 @@ namespace ZnKeyboard;
 
 /// <summary>
 /// Polish only, polish and translate into <see cref="Target"/>, or (<see cref="IsRead"/>) a faithful
-/// translation to read, for screenshot translation.
+/// translation to read: of text selected while reading, or (<see cref="FromScreenshot"/>) of a screenshot.
 /// </summary>
-public sealed record RewriteMode(TranslateLanguage? Target, bool IsRead = false)
+public sealed record RewriteMode(TranslateLanguage? Target, bool IsRead = false, bool FromScreenshot = false)
 {
     public static readonly RewriteMode Polish = new((TranslateLanguage?)null);
     public static RewriteMode Translate(TranslateLanguage target) => new(target);
-    public static RewriteMode Read(TranslateLanguage target) => new(target, true);
+    public static RewriteMode Read(TranslateLanguage target, bool fromScreenshot = false) => new(target, true, fromScreenshot);
 }
 
 public enum RewriteFailure { MissingKey, BadEndpoint, TooLong, NoChange, Http, BadResponse, Network }

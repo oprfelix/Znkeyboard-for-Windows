@@ -20,12 +20,16 @@ public sealed class Controller
 
     public bool IsPanelVisible => panel.IsVisible;
 
+    /// <summary>A pinned translation card the user has gone back to reading beside.</summary>
+    public bool IsPanelPinned => panel.IsVisible && panel.StaysOpen;
+
     public Controller()
     {
         panel.OnOpenSettings = () => OpenSettings();
         panel.OnRetry = () => { if (last is { } l) Process(l.text, l.mode, l.client); };
     }
 
+    /// <summary>Polish or translate the selection, or (<see cref="RewriteMode.IsRead"/>) translate text selected while reading.</summary>
     public async void Run(RewriteMode mode)
     {
         running?.Cancel();
@@ -46,10 +50,10 @@ public sealed class Controller
 
         // Where the selection ends, asked alongside the read, so the card can open beside it; an app
         // that hasn't answered by then just gets the pointer.
-        var where = Task.Run(() => TextBridge.InspectFocusedSelection([]));
+        var where = Task.Run(() => TextBridge.InspectFocusedSelection([], mode.IsRead));
         // Read the selection before showing anything: once the panel takes focus, Ctrl+C would copy from it.
         var selection = await TextBridge.SelectedTextAsync();
-        panel.Anchor = where.IsCompletedSuccessfully && where.Result.state == TextBridge.SelectionState.Selected ? where.Result.end : null;
+        panel.Anchor = where.IsCompletedSuccessfully && where.Result.state is TextBridge.SelectionState.Selected or TextBridge.SelectionState.Reading ? where.Result.end : null;
         if (cancel.IsCancellationRequested) return;
         if (string.IsNullOrWhiteSpace(selection))
         {
@@ -59,12 +63,15 @@ public sealed class Controller
 
         panel.OnReplace = text => _ = TextBridge.ReplaceSelectionAsync(source, selection, text);
         // Picking another language in the card translates the same selection again and remembers it.
+        var reading = mode.IsRead;
         panel.OnLanguageChange = language =>
         {
-            Settings.Current.TranslateTarget = language.Code;
+            if (reading) Settings.Current.ReadingTarget = language.Code; else Settings.Current.TranslateTarget = language.Code;
             Settings.Current.Save();
-            Process(selection, RewriteMode.Translate(language), client);
+            Process(selection, reading ? RewriteMode.Read(language) : RewriteMode.Translate(language), client);
         };
+        // Text already in the reading language (Chinese) goes to English instead, as for screenshots.
+        if (reading && mode.Target is { Code: "ZH" or "TW" } && ScreenText.IsMostlyChinese(selection)) mode = RewriteMode.Read(Languages.ByCode("EN"));
         Process(selection, mode, client);
     }
 
@@ -99,7 +106,7 @@ public sealed class Controller
         using var image = captured;
         if (image == null || cancel.IsCancellationRequested) return;
         var target = Settings.Current.ReadTarget;
-        var mode = RewriteMode.Read(target);
+        var mode = RewriteMode.Read(target, fromScreenshot: true);
         panel.ShowLoading(mode);
         string text;
         try
@@ -118,13 +125,13 @@ public sealed class Controller
             panel.ShowError(L.NoTextFound, offerSettings: false);
             return;
         }
-        if (target.Code is "ZH" or "TW" && ScreenText.IsMostlyChinese(text)) mode = RewriteMode.Read(Languages.ByCode("EN"));
+        if (target.Code is "ZH" or "TW" && ScreenText.IsMostlyChinese(text)) mode = RewriteMode.Read(Languages.ByCode("EN"), fromScreenshot: true);
 
         panel.OnLanguageChange = language =>
         {
             Settings.Current.ScreenshotTarget = language.Code;
             Settings.Current.Save();
-            Process(text, RewriteMode.Read(language), client);
+            Process(text, RewriteMode.Read(language, fromScreenshot: true), client);
         };
         Process(text, mode, client);
     }
@@ -141,7 +148,8 @@ public sealed class Controller
         {
             var result = await client.RewriteAsync(core, mode, cancel.Token);
             if (cancel.IsCancellationRequested || !panel.IsVisible) return;
-            if (mode.IsRead) panel.ShowResult(result, recognised: selection);
+            // A screenshot's text is shown above its translation; selected text is still on screen.
+            if (mode.IsRead) panel.ShowResult(result, recognised: mode.FromScreenshot ? selection : null);
             // Keep the selection's surrounding spaces and line breaks so the paste fits back in.
             else panel.ShowResult(leading + result + trailing);
         }

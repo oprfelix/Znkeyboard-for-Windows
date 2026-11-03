@@ -50,9 +50,11 @@ public sealed class App : Application
 
         pill = new SelectionPill
         {
-            IsSuspended = () => controller.IsPanelVisible,
+            // A pinned card sits beside what's being read, so selections there still get the pill.
+            IsSuspended = () => controller.IsPanelVisible && !controller.IsPanelPinned,
             OnPolish = () => controller.Run(RewriteMode.Polish),
             OnTranslate = () => controller.Run(RewriteMode.Translate(Settings.Current.Target)),
+            OnRead = () => controller.Run(RewriteMode.Read(Settings.Current.ReadingLanguage)),
         };
 
         // WPF makes the first window it creates (the hidden result card) the main window, and dialogs

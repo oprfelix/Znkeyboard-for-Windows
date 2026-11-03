@@ -19,14 +19,17 @@ namespace ZnKeyboard;
 /// <summary>
 /// Shows 润色 | AI 翻译为 [EN ▾] next to text the user selects in an editable field: after a mouse
 /// drag, double or triple click (at the pointer), or Ctrl+A / Shift+arrows (under the selection,
-/// where the app reports it). Typing, clicking elsewhere or switching windows hides it. The pill
-/// never takes focus, so the selection stays where it is. Nothing is read or sent until a button
-/// is clicked.
+/// where the app reports it). Text selected with the mouse while reading (a web page, a document)
+/// gets 翻译为 [EN ▾] alone, with its own language. Typing, clicking elsewhere or switching windows
+/// hides it. The pill never takes focus, so the selection stays where it is. Nothing is read or
+/// sent until a button is clicked.
 /// </summary>
 public sealed class SelectionPill : IDisposable
 {
     public Action OnPolish { get; set; } = () => { };
     public Action OnTranslate { get; set; } = () => { };
+    /// <summary>Translate text selected while reading (the reading pill).</summary>
+    public Action OnRead { get; set; } = () => { };
     /// <summary>True while the result card is up; the pill stays out of its way.</summary>
     public Func<bool> IsSuspended { get; set; } = () => false;
 
@@ -34,6 +37,9 @@ public sealed class SelectionPill : IDisposable
     private readonly TextBlock chipText = new() { FontSize = 11, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
     private readonly Button chip;
     private readonly Button polishButton, translateButton;
+    private readonly Border divider;
+    /// <summary>Showing for read-only text: translate only, into the reading language.</summary>
+    private bool reading;
     private readonly Native.HookProc mouseProc, keyboardProc; // Kept alive: the hooks call them.
     private readonly IntPtr mouseHook, keyboardHook;
     private readonly DispatcherTimer watch = new() { Interval = TimeSpan.FromMilliseconds(300) };
@@ -71,8 +77,12 @@ public sealed class SelectionPill : IDisposable
         };
         chip.Click += (_, _) => ChooseLanguage();
         var polish = polishButton = Flat(L.Polish, SymbolRegular.Sparkle16, () => { Hide(); OnPolish(); });
-        var translate = translateButton = Flat(L.TranslateShort, SymbolRegular.Translate16, () => { Hide(); OnTranslate(); });
-        var divider = new Border { Width = 1, Height = 16, Margin = new Thickness(2, 0, 2, 0) };
+        var translate = translateButton = Flat(L.TranslateShort, SymbolRegular.Translate16, () =>
+        {
+            Hide();
+            if (reading) OnRead(); else OnTranslate();
+        });
+        divider = new Border { Width = 1, Height = 16, Margin = new Thickness(2, 0, 2, 0) };
         divider.SetResourceReference(Border.BackgroundProperty, "DividerStrokeColorDefaultBrush");
         var face = new Border
         {
@@ -241,7 +251,10 @@ public sealed class SelectionPill : IDisposable
     /// </summary>
     private async void Check(Native.POINT? pointer, Native.POINT? pressedAt, bool trustGesture = false)
     {
-        if (!Settings.Current.SelectionPill || IsSuspended())
+        var settings = Settings.Current;
+        // Reading selections are mouse-only: Ctrl+A on a page selects the whole page.
+        var lookForReading = settings.ReadingPill && pointer != null;
+        if ((!settings.SelectionPill && !lookForReading) || IsSuspended())
         {
             DebugLog.Note("  skipped: " + (IsSuspended() ? "result card open" : "turned off in settings"));
             return;
@@ -252,7 +265,7 @@ public sealed class SelectionPill : IDisposable
         await Task.Delay(150);
         var started = DateTime.Now;
         var points = new[] { pointer, pressedAt }.OfType<Native.POINT>().ToArray();
-        var inspect = Task.Run(() => TextBridge.InspectFocusedSelection(points));
+        var inspect = Task.Run(() => TextBridge.InspectFocusedSelection(points, lookForReading));
         // UI Automation can be slow the first time, or in big documents. No answer in time means no
         // pill: a double click on a file or a drag of a title bar looks the same from here.
         var answered = await Task.WhenAny(inspect, Task.Delay(1200)) == inspect;
@@ -260,8 +273,10 @@ public sealed class SelectionPill : IDisposable
         var (state, end) = answered ? inspect.Result : (TextBridge.SelectionState.Failed, (Rect?)null);
         DebugLog.Note($"  selection {state}{(answered ? "" : " (timed out)")} after {(DateTime.Now - started).TotalMilliseconds:F0} ms, position {(end.HasValue ? "known" : "unknown")}");
         // Editable fields that report no selection at all: trust a clear mouse gesture there.
-        var show = state == TextBridge.SelectionState.Selected || (state == TextBridge.SelectionState.Unknown && pointer != null && trustGesture);
-        if (!show || IsSuspended()) return;
+        var editing = settings.SelectionPill && (state == TextBridge.SelectionState.Selected
+            || (state == TextBridge.SelectionState.Unknown && pointer != null && trustGesture));
+        var readingText = lookForReading && state == TextBridge.SelectionState.Reading;
+        if (!(editing || readingText) || IsSuspended()) return;
 
         Native.POINT anchor;
         if (pointer is { } p) anchor = p;
@@ -269,9 +284,15 @@ public sealed class SelectionPill : IDisposable
         else return; // A keyboard selection with no reported position: nothing to anchor to.
 
         sourceWindow = foreground;
-        chipText.Text = Settings.Current.Target.Code;
-        polishButton.ToolTip = $"{L.Polish}  {Settings.Current.ShortcutFor(ShortcutAction.Polish).Display}";
-        translateButton.ToolTip = $"{L.TranslateShort} {Settings.Current.Target.DisplayName}  {Settings.Current.ShortcutFor(ShortcutAction.Translate).Display}";
+        reading = readingText;
+        polishButton.Visibility = divider.Visibility = reading ? Visibility.Collapsed : Visibility.Visible;
+        translateButton.Content = reading ? L.ReadShort : L.TranslateShort;
+        var target = reading ? settings.ReadingLanguage : settings.Target;
+        chipText.Text = target.Code;
+        polishButton.ToolTip = $"{L.Polish}  {settings.ShortcutFor(ShortcutAction.Polish).Display}";
+        translateButton.ToolTip = reading
+            ? $"{L.ReadShort} {target.DisplayName}"
+            : $"{L.TranslateShort} {target.DisplayName}  {settings.ShortcutFor(ShortcutAction.Translate).Display}";
         var scale = Native.ScaleAt(anchor);
         window.Left = anchor.X / scale - 4;
         window.Top = anchor.Y / scale + 2;
@@ -283,13 +304,15 @@ public sealed class SelectionPill : IDisposable
     private void ChooseLanguage()
     {
         var menu = new ContextMenu { PlacementTarget = chip, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom };
+        var settings = Settings.Current;
+        var current = reading ? settings.ReadingTarget : settings.TranslateTarget;
         foreach (var language in Languages.All)
         {
-            var item = new MenuItem { Header = language.Label, IsCheckable = true, IsChecked = language.Code == Settings.Current.TranslateTarget };
+            var item = new MenuItem { Header = language.Label, IsCheckable = true, IsChecked = language.Code == current };
             item.Click += (_, _) =>
             {
-                Settings.Current.TranslateTarget = language.Code;
-                Settings.Current.Save();
+                if (reading) settings.ReadingTarget = language.Code; else settings.TranslateTarget = language.Code;
+                settings.Save();
                 chipText.Text = language.Code;
             };
             menu.Items.Add(item);

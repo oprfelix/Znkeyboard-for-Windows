@@ -219,6 +219,18 @@ public sealed class SettingsWindow : FluentWindow
         var pill = new ToggleSwitch { IsChecked = settings.SelectionPill };
         pill.Click += (_, _) => { settings.SelectionPill = pill.IsChecked == true; settings.Save(); };
         page.Children.Add(Card(SymbolRegular.DesktopCursor24, L.SelectionPill, L.SelectionPillNote, pill));
+
+        var readingPill = new ToggleSwitch { IsChecked = settings.ReadingPill };
+        readingPill.Click += (_, _) => { settings.ReadingPill = readingPill.IsChecked == true; settings.Save(); };
+        page.Children.Add(Card(SymbolRegular.TextEditStyle24, L.ReadingPill, L.ReadingPillNote, readingPill));
+
+        var readingTarget = Combo(Languages.All.Select(l => l.Label).ToArray(), Languages.All.ToList().FindIndex(l => l.Code == settings.ReadingTarget));
+        readingTarget.SelectionChanged += (_, _) =>
+        {
+            settings.ReadingTarget = Languages.All[readingTarget.SelectedIndex].Code;
+            settings.Save();
+        };
+        page.Children.Add(Card(SymbolRegular.Translate24, L.ReadingTarget, L.ReadingTargetNote, readingTarget));
     }
 
     private void BuildShortcuts()

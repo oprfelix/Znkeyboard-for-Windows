@@ -55,23 +55,25 @@ public static class TextBridge
     /// <summary>
     /// Unknown: an editable field that can't report its selection. Elsewhere: the focused field isn't
     /// where the mouse selected (an old selection, while the user dragged a scrollbar or title bar).
-    /// Failed: the app couldn't be asked (it errored, or focus moved mid-way).
+    /// Failed: the app couldn't be asked (it errored, or focus moved mid-way). Reading: text selected
+    /// in something that can't be edited (a web page, a document being read).
     /// </summary>
-    public enum SelectionState { NotEditable, Empty, Selected, Unknown, Elsewhere, Failed }
+    public enum SelectionState { NotEditable, Empty, Selected, Unknown, Elsewhere, Failed, Reading }
 
     /// <summary>
-    /// Whether the focused element in another app is an editable text box with a selection, and
-    /// where the selection ends on screen (device pixels) when the app reports it. Blocking; call
-    /// off the UI thread.
+    /// Whether the focused element in another app is an editable text box with a selection (or, with
+    /// <paramref name="reading"/>, any element reporting selected text), and where the selection ends
+    /// on screen (device pixels) when the app reports it. Blocking; call off the UI thread.
     /// </summary>
     /// <param name="mousePoints">Where a mouse selection began and ended (device pixels); empty for the keyboard.</param>
-    internal static (SelectionState state, Rect? end) InspectFocusedSelection(Native.POINT[] mousePoints)
+    internal static (SelectionState state, Rect? end) InspectFocusedSelection(Native.POINT[] mousePoints, bool reading = false)
     {
         try
         {
             var focused = AutomationElement.FocusedElement;
             if (focused == null || focused.Current.ProcessId == Environment.ProcessId) return (SelectionState.NotEditable, null);
-            if (!IsEditable(focused))
+            var editable = IsEditable(focused);
+            if (!editable && !reading)
             {
                 DebugLog.Note($"  focused {focused.Current.ControlType.ProgrammaticName} '{focused.Current.ClassName}' is not editable");
                 return (SelectionState.NotEditable, null);
@@ -87,13 +89,16 @@ public static class TextBridge
                     return (SelectionState.Elsewhere, null);
                 }
             }
-            if (!focused.TryGetCurrentPattern(TextPattern.Pattern, out var pattern)) return (SelectionState.Unknown, null);
+            // Read-only text that can't report its selection gets nothing: there is no clear sign it was text.
+            var unknown = editable ? SelectionState.Unknown : SelectionState.NotEditable;
+            if (!focused.TryGetCurrentPattern(TextPattern.Pattern, out var pattern)) return (unknown, null);
             var ranges = ((TextPattern)pattern).GetSelection();
-            if (ranges.Length == 0) return (SelectionState.Unknown, null);
+            if (ranges.Length == 0) return (unknown, null);
             var text = string.Concat(ranges.Select(r => r.GetText(200)));
-            if (text.Length == 0) return (SelectionState.Empty, null);
+            if (string.IsNullOrWhiteSpace(text)) return (editable ? SelectionState.Empty : SelectionState.NotEditable, null);
             var rects = ranges[^1].GetBoundingRectangles();
-            return (SelectionState.Selected, rects.Length > 0 ? rects[^1] : null);
+            if (!editable) DebugLog.Note($"  focused {focused.Current.ControlType.ProgrammaticName} '{focused.Current.ClassName}' is read-only, with text selected");
+            return (editable ? SelectionState.Selected : SelectionState.Reading, rects.Length > 0 ? rects[^1] : null);
         }
         catch (Exception e)
         {

@@ -121,9 +121,18 @@ public static class L
         "Works with OpenAI, OpenRouter and other compatible services: enter their API address and model. When you polish or translate, the selected text is sent to that service.");
 
     public static string UsageSection => T("使用", "Usage");
-    public static string SelectionPill => T("选中文字后显示按钮", "Show buttons on selected text");
-    public static string SelectionPillNote => T("用鼠标拖选、双击或按 Ctrl+A 全选后，旁边会出现「润色」和「AI 翻译为」按钮",
-        "Drag over text, double-click or press Ctrl+A, and Polish and Translate buttons appear beside it");
+    public static string SelectionPill => T("输入框中选中文字后显示按钮", "Buttons on text selected in a text box");
+    public static string SelectionPillNote => T("在输入框里拖选、双击或按 Ctrl+A 全选后，旁边会出现「润色」和「AI 翻译为」按钮",
+        "Drag over text in a text box, double-click or press Ctrl+A, and Polish and Translate buttons appear beside it");
+    public static string ReadingPill => T("划词翻译", "Translate text you select while reading");
+    public static string ReadingPillNote => T("在网页、文档里用鼠标选中文字后，旁边会出现「翻译为」按钮",
+        "Select text on a web page or in a document with the mouse, and a Translate button appears beside it");
+    public static string ReadingTarget => T("划词翻译成", "Selected text translates to");
+    public static string ReadingTargetNote => T("「翻译为」默认翻译成的语言；设为中文时，选中的中文会翻译成英文",
+        "What the reading Translate button turns text into; set to Chinese, Chinese text goes to English");
+    public static string ReadShort => T("翻译为", "Translate to");
+    public static string PinCard => T("固定：点击别处时不关闭", "Pin: stay open when clicking elsewhere");
+    public static string UnpinCard => T("取消固定：点击别处时关闭", "Unpin: close when clicking elsewhere");
     public static string TranslateTargetNote => T("「AI 翻译为」默认翻译成的语言", "What Translate turns your text into");
     public static string ScreenshotTarget => T("截图翻译成", "Screenshot translates to");
     public static string ScreenshotTargetNote => T("截到的如果本身是中文，会翻译成英文。图片只在本机识别，不会上传",
