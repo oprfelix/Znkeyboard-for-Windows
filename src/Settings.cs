@@ -78,6 +78,13 @@ public sealed class Settings
     public bool ReadingPill { get; set; }
     /// <summary>Translation cards (reading, screenshot) stay open on clicks elsewhere. Remembered.</summary>
     public bool PinTranslationCard { get; set; }
+    /// <summary>The anonymous daily ping behind the numbers on znkeyboard.2amz.com. On by default.</summary>
+    public bool AnonymousStats { get; set; } = true;
+    /// <summary>A random id made on this PC for the ping, tied to nothing else.</summary>
+    public string? InstallId { get; set; }
+    /// <summary>Polish and translate runs not yet reported.</summary>
+    public int PendingUses { get; set; }
+    public DateTime LastPing { get; set; }
     /// <summary>A daily look for a new release. On by default.</summary>
     public bool AutomaticUpdateChecks { get; set; } = true;
     public DateTime LastUpdateCheck { get; set; }

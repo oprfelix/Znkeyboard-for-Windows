@@ -18,8 +18,8 @@ using TextBlock = System.Windows.Controls.TextBlock;
 namespace ZnKeyboard;
 
 /// <summary>
-/// Updates in place: checks the latest GitHub release (by hand, or once a day), downloads its exe
-/// and runs it. The new exe installs itself over this copy (Installer), which it asks to quit, and
+/// Updates in place: checks the latest release (by hand, or once a day) on znkeyboard.2amz.com, or on
+/// GitHub when that can't be reached, downloads its exe (from GitHub if Cloudflare fails) and runs it. The new exe installs itself over this copy (Installer), which it asks to quit, and
 /// starts; settings and API keys stay. Also the About box.
 /// </summary>
 public static class Updates
@@ -29,7 +29,8 @@ public static class Updates
     // A 30 MB download on a slow line needs longer than an API call.
     private static readonly HttpClient Download = new() { Timeout = TimeSpan.FromMinutes(10) };
 
-    public sealed record Release(string Version, Uri Exe, long Size);
+    /// <summary>A release's exe; <paramref name="Fallback"/> is the same file on GitHub, tried when <paramref name="Exe"/> fails.</summary>
+    public sealed record Release(string Version, Uri Exe, long Size, Uri? Fallback = null, string? Sha256 = null);
 
     /// <summary>A newer release found by the last check; the tray menu offers it.</summary>
     public static Release? Available { get; private set; }
@@ -82,6 +83,8 @@ public static class Updates
 
     private static async void AutomaticCheck()
     {
+        // The anonymous daily ping shares this timer; it has its own switch.
+        UsageStats.PingIfDue();
         var settings = Settings.Current;
         if (!settings.AutomaticUpdateChecks || DateTime.UtcNow - settings.LastUpdateCheck < TimeSpan.FromHours(20)) return;
         var (reached, release) = await LatestReleaseAsync();
@@ -104,8 +107,30 @@ public static class Updates
     private static bool IsNewer(Release release) =>
         Version.TryParse(release.Version, out var next) && Version.TryParse(CurrentVersion, out var mine) && next > mine;
 
-    /// <summary>Whether GitHub answered, and the latest release with its exe (null when it has none).</summary>
-    private static async Task<(bool reached, Release? release)> LatestReleaseAsync()
+    /// <summary>Whether Cloudflare or GitHub answered, and the latest release with its exe (null when it has none).</summary>
+    private static async Task<(bool reached, Release? release)> LatestReleaseAsync() =>
+        await LatestFromCloudflareAsync() is { } release ? (true, release) : await LatestFromGitHubAsync();
+
+    /// <summary>The Windows entry of znkeyboard.2amz.com's latest.json, which mainland China reaches more reliably than GitHub.</summary>
+    private static async Task<Release?> LatestFromCloudflareAsync()
+    {
+        try
+        {
+            var json = JsonNode.Parse(await Http.GetStringAsync("https://znkeyboard.2amz.com/download/latest.json"))?["windows"];
+            var version = (string?)json?["version"];
+            var file = (string?)json?["file"];
+            if (version == null || file == null || !file.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) || file.Contains('/')) return null;
+            return new Release(version, new Uri($"https://znkeyboard.2amz.com/download/windows/{file}"), (long?)json?["size"] ?? 0,
+                new Uri($"https://github.com/oprfelix/Znkeyboard-for-Windows/releases/download/v{version}/{Uri.EscapeDataString(file)}"),
+                (string?)json?["sha256"]);
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    private static async Task<(bool reached, Release? release)> LatestFromGitHubAsync()
     {
         try
         {
@@ -141,8 +166,19 @@ public static class Updates
         var (title, bar) = ShowProgress(release, cancel);
         try
         {
-            var path = await DownloadAsync(release, fraction => bar.Value = fraction * 100, cancel.Token);
-            Verify(path, release);
+            string path;
+            try
+            {
+                path = await DownloadAsync(release, release.Exe, fraction => bar.Value = fraction * 100, cancel.Token);
+                Verify(path, release);
+            }
+            catch (Exception) when (release.Fallback != null && !cancel.IsCancellationRequested)
+            {
+                // Cloudflare failed or gave a bad file: the same release from GitHub.
+                bar.Value = 0;
+                path = await DownloadAsync(release, release.Fallback, fraction => bar.Value = fraction * 100, cancel.Token);
+                Verify(path, release);
+            }
             title.Text = L.InstallingUpdate;
             bar.IsIndeterminate = true;
             DebugLog.Note($"update {release.Version} downloaded, starting it");
@@ -164,11 +200,11 @@ public static class Updates
 
     private sealed class UpdateException(string message) : Exception(message);
 
-    private static async Task<string> DownloadAsync(Release release, Action<double> progress, CancellationToken cancel)
+    private static async Task<string> DownloadAsync(Release release, Uri from, Action<double> progress, CancellationToken cancel)
     {
         Directory.CreateDirectory(DownloadFolder);
         var path = Path.Combine(DownloadFolder, $"ZnKeyboard-Windows-{release.Version}.exe");
-        using var request = new HttpRequestMessage(HttpMethod.Get, release.Exe);
+        using var request = new HttpRequestMessage(HttpMethod.Get, from);
         request.Headers.UserAgent.ParseAdd("ZnKeyboard-Windows");
         using var response = await Download.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancel);
         if (!response.IsSuccessStatusCode) throw new UpdateException(L.UpdateDownloadFailed);
@@ -190,13 +226,20 @@ public static class Updates
     }
 
     /// <summary>
-    /// The whole file, and ZnKeyboard at the version the release names. The exe isn't code signed;
-    /// it comes over HTTPS from the project's own GitHub release.
+    /// The whole file (and its SHA-256, when the release list gives one), and ZnKeyboard at the version
+    /// the release names. The exe isn't code signed; it comes over HTTPS from the project's own
+    /// Cloudflare site or GitHub release.
     /// </summary>
     private static void Verify(string path, Release release)
     {
         var size = new FileInfo(path).Length;
         if (release.Size > 0 && size != release.Size) throw new UpdateException(L.UpdateDamaged);
+        if (release.Sha256 != null)
+        {
+            using var file = File.OpenRead(path);
+            if (!string.Equals(Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(file)), release.Sha256, StringComparison.OrdinalIgnoreCase))
+                throw new UpdateException(L.UpdateDamaged);
+        }
         var info = FileVersionInfo.GetVersionInfo(path);
         var version = $"{info.FileMajorPart}.{info.FileMinorPart}.{info.FileBuildPart}";
         if (info.ProductName != "ZnKeyboard for Windows" || version != release.Version) throw new UpdateException(L.UpdateDamaged);

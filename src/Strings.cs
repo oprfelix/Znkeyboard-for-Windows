@@ -27,8 +27,8 @@ public static class L
     public static string ScreenshotTranslate => T("截图翻译", "Screenshot Translate");
     public static string CheckForUpdates => T("检查更新…", "Check for Updates…");
     public static string About => T("关于 ZnKeyboard", "About ZnKeyboard");
-    public static string AboutText(string version) => T($"ZnKeyboard for Windows {version}\n选中文字一键润色、翻译，截图翻译。\n\noprfelix.github.io/znkeyboard\nGPL-3.0 开源",
-        $"ZnKeyboard for Windows {version}\nPolish or translate selected text, and translate screenshots.\n\noprfelix.github.io/znkeyboard\nOpen source under GPL-3.0");
+    public static string AboutText(string version) => T($"ZnKeyboard for Windows {version}\n选中文字一键润色、翻译，截图翻译。\n\n官网：znkeyboard.2amz.com\n源代码与反馈：github.com/oprfelix/Znkeyboard-for-Windows\nGPL-3.0 开源",
+        $"ZnKeyboard for Windows {version}\nPolish or translate selected text, and translate screenshots.\n\nWebsite: znkeyboard.2amz.com\nSource and feedback: github.com/oprfelix/Znkeyboard-for-Windows\nOpen source under GPL-3.0");
     public static string UpdateAvailable(string version) => T($"有新版本 {version}", $"ZnKeyboard {version} is available");
     public static string UpdateAvailableNote(string current) => T($"你正在使用 {current}。点「立即更新」会自动下载并替换，完成后重新启动 ZnKeyboard，设置和 API Key 都会保留。",
         $"You have {current}. Update Now downloads and installs it, then restarts ZnKeyboard; your settings and API key stay.");
@@ -42,6 +42,8 @@ public static class L
     public static string UpdateDownloadFailed => T("下载失败，请检查网络。", "The download failed. Check your connection.");
     public static string UpdateDamaged => T("下载的文件不完整或不是 ZnKeyboard，为安全起见没有安装。", "The download was incomplete or not ZnKeyboard, so it wasn't installed.");
     public static string AutomaticUpdates => T("自动检查更新", "Check for updates automatically");
+    public static string AnonymousStats => T("发送匿名使用统计", "Send anonymous usage statistics");
+    public static string AnonymousStatsNote => T("每天一次，只发送随机编号、平台、版本和使用次数，不包含任何文字", "Once a day: a random ID, platform, version and how often you used it. Never any text");
     public static string AutomaticUpdatesNote => T("每天检查一次，有新版本时提醒你，点一下即可更新", "Checks once a day and offers new versions; one click installs them");
     public static string AutoUpdatedNote => T("设置和 API Key 都已保留。", "Your settings and API key were kept.");
     public static string UpToDate(string current) => T($"ZnKeyboard {current} 已是最新版本。", $"ZnKeyboard {current} is up to date.");

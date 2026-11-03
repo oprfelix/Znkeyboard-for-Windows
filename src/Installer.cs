@@ -195,7 +195,8 @@ public static class Installer
         key.SetValue("DisplayIcon", InstalledExe);
         key.SetValue("InstallLocation", InstallFolder);
         key.SetValue("UninstallString", $"\"{InstalledExe}\" {UninstallArg}");
-        key.SetValue("URLInfoAbout", "https://oprfelix.github.io/znkeyboard/");
+        key.SetValue("URLInfoAbout", "https://znkeyboard.2amz.com/");
+        key.SetValue("HelpLink", "https://github.com/oprfelix/Znkeyboard-for-Windows");
         key.SetValue("EstimatedSize", (int)(new FileInfo(InstalledExe).Length / 1024), RegistryValueKind.DWord);
         key.SetValue("NoModify", 1, RegistryValueKind.DWord);
         key.SetValue("NoRepair", 1, RegistryValueKind.DWord);

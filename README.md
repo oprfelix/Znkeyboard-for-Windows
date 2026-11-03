@@ -21,6 +21,11 @@ default) or a custom address, each with its own key in Windows Credential Manage
   About, Quit. Double-click opens Settings.
 - Settings follow the Windows 11 style (Fluent controls, Mica, light/dark) through WPF-UI (MIT).
 
+Website: [znkeyboard.2amz.com](https://znkeyboard.2amz.com/) (mirror of oprfelix.github.io/znkeyboard). Updates come
+from znkeyboard.2amz.com, or from GitHub Releases when that fails. Once a day ZnKeyboard sends an anonymous ping
+(a random ID, platform, version and how many times it polished or translated; never any text) for the usage
+numbers on the website; Settings → General turns it off.
+
 Windows 10/11 x64 with the .NET 10 Desktop Runtime. Settings live in `%APPDATA%\ZnKeyboard\settings.json`.
 Windows running as administrator ignore input from a normal app, so text there can't be replaced.
 

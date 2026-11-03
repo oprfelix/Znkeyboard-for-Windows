@@ -147,6 +147,7 @@ public sealed class Controller
         try
         {
             var result = await client.RewriteAsync(core, mode, cancel.Token);
+            UsageStats.RecordUse();
             if (cancel.IsCancellationRequested || !panel.IsVisible) return;
             // The original shows above the translation, to copy as well (a screenshot's text especially).
             if (mode.IsRead) panel.ShowResult(result, recognised: selection);

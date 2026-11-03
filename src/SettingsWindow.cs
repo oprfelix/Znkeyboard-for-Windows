@@ -272,6 +272,14 @@ public sealed class SettingsWindow : FluentWindow
             settings.Save();
         };
         page.Children.Add(Card(SymbolRegular.ArrowSync24, L.AutomaticUpdates, L.AutomaticUpdatesNote, automatic));
+
+        var stats = new ToggleSwitch { IsChecked = settings.AnonymousStats };
+        stats.Click += (_, _) =>
+        {
+            settings.AnonymousStats = stats.IsChecked == true;
+            settings.Save();
+        };
+        page.Children.Add(Card(SymbolRegular.DataUsage24, L.AnonymousStats, L.AnonymousStatsNote, stats));
     }
 
     // ---- AI service helpers ----
