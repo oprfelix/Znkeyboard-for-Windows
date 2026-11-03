@@ -27,8 +27,8 @@ public static class L
     public static string ScreenshotTranslate => T("截图翻译", "Screenshot Translate");
     public static string CheckForUpdates => T("检查更新…", "Check for Updates…");
     public static string About => T("关于 ZnKeyboard", "About ZnKeyboard");
-    public static string AboutText(string version) => T($"ZnKeyboard for Windows {version}\n选中文字一键润色、翻译，截图翻译。\n\n官网：znkeyboard.2amz.com\n源代码与反馈：github.com/oprfelix/Znkeyboard-for-Windows\nGPL-3.0 开源",
-        $"ZnKeyboard for Windows {version}\nPolish or translate selected text, and translate screenshots.\n\nWebsite: znkeyboard.2amz.com\nSource and feedback: github.com/oprfelix/Znkeyboard-for-Windows\nOpen source under GPL-3.0");
+    public static string AboutText(string version) => T($"ZnKeyboard for Windows {version}\n选中文字一键润色、翻译，截图翻译。\n\n官网：znkeyboard.2amz.com\n镜像：oprfelix.github.io/znkeyboard\nGPL-3.0 开源",
+        $"ZnKeyboard for Windows {version}\nPolish or translate selected text, and translate screenshots.\n\nWebsite: znkeyboard.2amz.com\nMirror: oprfelix.github.io/znkeyboard\nOpen source under GPL-3.0");
     public static string UpdateAvailable(string version) => T($"有新版本 {version}", $"ZnKeyboard {version} is available");
     public static string UpdateAvailableNote(string current) => T($"你正在使用 {current}。点「立即更新」会自动下载并替换，完成后重新启动 ZnKeyboard，设置和 API Key 都会保留。",
         $"You have {current}. Update Now downloads and installs it, then restarts ZnKeyboard; your settings and API key stay.");
