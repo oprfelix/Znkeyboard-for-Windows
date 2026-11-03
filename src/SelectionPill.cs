@@ -93,6 +93,9 @@ public sealed class SelectionPill : IDisposable
 
         window = new Window
         {
+            // WPF-UI styles every plain Window as an app window (at least 460 × 320, with its own frame),
+            // which turned the pill into a large box; an explicit style keeps WPF's plain one.
+            Style = new Style(typeof(Window)),
             WindowStyle = WindowStyle.None,
             AllowsTransparency = true,
             Background = Brushes.Transparent,

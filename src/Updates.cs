@@ -211,6 +211,8 @@ public static class Updates
         stop.Click += (_, _) => cancel.Cancel();
         var window = new Window
         {
+            // Not WPF-UI's app window style, whose 320 px minimum height would leave the progress box mostly empty.
+            Style = new Style(typeof(Window)),
             Title = "ZnKeyboard",
             Width = 380,
             SizeToContent = SizeToContent.Height,
