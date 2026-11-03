@@ -54,7 +54,7 @@ public sealed class App : Application
             IsSuspended = () => controller.IsPanelVisible && !controller.IsPanelPinned,
             OnPolish = () => controller.Run(RewriteMode.Polish),
             OnTranslate = () => controller.Run(RewriteMode.Translate(Settings.Current.Target)),
-            OnRead = () => controller.Run(RewriteMode.Read(Settings.Current.ReadingLanguage)),
+            OnRead = () => controller.Run(RewriteMode.Read(Settings.Current.ReadTarget)),
         };
 
         // WPF makes the first window it creates (the hidden result card) the main window, and dialogs

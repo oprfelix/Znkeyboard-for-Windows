@@ -7,7 +7,8 @@ default) or a custom address, each with its own key in Windows Credential Manage
 
 - Select text in a text box (drag, double-click, Ctrl+A) and 润色 | AI 翻译为 [EN ▾] appears beside it.
 - Reading translation (off by default, Settings → Usage): select text on a web page or in a document with the
-  mouse and 翻译为 [EN ▾] appears; it translates faithfully into its own language and the result copies.
+  mouse and 翻译为 [ZH ▾] appears; it translates faithfully into the reading language screenshots use, and
+  the card shows the original above the translation, each to copy.
 - **Ctrl+Alt+R** polish the selected text · **Ctrl+Alt+T** translate it (both changeable in Settings)
 - **Ctrl+Alt+E** screenshot translate: drag over part of the screen; its text is recognised on this PC
   (Windows OCR) and translated faithfully into your reading language (Simplified Chinese by default;

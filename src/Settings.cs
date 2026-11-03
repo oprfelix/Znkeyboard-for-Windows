@@ -66,7 +66,7 @@ public sealed class Settings
     public string GeminiModel { get; set; } = DefaultGeminiModel;
     public string OpenAIModel { get; set; } = DefaultOpenAIModel;
     public string TranslateTarget { get; set; } = "EN";
-    /// <summary>The language screenshot translation reads into.</summary>
+    /// <summary>The language translations to read go into: text selected while reading, and screenshots. Kept under its 0.4 name.</summary>
     public string ScreenshotTarget { get; set; } = "ZH";
     /// <summary>"system", "zh" or "en".</summary>
     public string UiLanguage { get; set; } = "system";
@@ -74,8 +74,6 @@ public sealed class Settings
     public bool SelectionPill { get; set; } = true;
     /// <summary>The 翻译为 pill on text selected while reading (web pages, documents). Off by default.</summary>
     public bool ReadingPill { get; set; }
-    /// <summary>The language the reading pill translates into, on its own.</summary>
-    public string ReadingTarget { get; set; } = "EN";
     /// <summary>Translation cards (reading, screenshot) stay open on clicks elsewhere. Remembered.</summary>
     public bool PinTranslationCard { get; set; }
     /// <summary>A daily look for a new release. On by default.</summary>
@@ -120,7 +118,6 @@ public sealed class Settings
         settings.OpenAIModel ??= DefaultOpenAIModel;
         settings.TranslateTarget ??= "EN";
         settings.ScreenshotTarget ??= "ZH";
-        settings.ReadingTarget ??= "EN";
         settings.UiLanguage ??= "system";
         if (!Enum.IsDefined(settings.Provider)) settings.Provider = Provider.Gemini;
         return settings;
@@ -196,8 +193,6 @@ public sealed class Settings
     }
 
     public TranslateLanguage ReadTarget => Languages.ByCode(ScreenshotTarget);
-
-    public TranslateLanguage ReadingLanguage => Languages.ByCode(ReadingTarget);
 
     /// <summary>The client for the selected provider and its key, model and endpoint.</summary>
     public AIClient CreateClient() => new(Provider, CompatibleBaseUrl, Credentials.Read(Provider) ?? "", ModelFor(Provider));

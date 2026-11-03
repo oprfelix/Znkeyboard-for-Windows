@@ -127,16 +127,13 @@ public static class L
     public static string ReadingPill => T("划词翻译", "Translate text you select while reading");
     public static string ReadingPillNote => T("在网页、文档里用鼠标选中文字后，旁边会出现「翻译为」按钮",
         "Select text on a web page or in a document with the mouse, and a Translate button appears beside it");
-    public static string ReadingTarget => T("划词翻译成", "Selected text translates to");
-    public static string ReadingTargetNote => T("「翻译为」默认翻译成的语言；设为中文时，选中的中文会翻译成英文",
-        "What the reading Translate button turns text into; set to Chinese, Chinese text goes to English");
     public static string ReadShort => T("翻译为", "Translate to");
     public static string PinCard => T("固定：点击别处时不关闭", "Pin: stay open when clicking elsewhere");
     public static string UnpinCard => T("取消固定：点击别处时关闭", "Unpin: close when clicking elsewhere");
     public static string TranslateTargetNote => T("「AI 翻译为」默认翻译成的语言", "What Translate turns your text into");
-    public static string ScreenshotTarget => T("截图翻译成", "Screenshot translates to");
-    public static string ScreenshotTargetNote => T("截到的如果本身是中文，会翻译成英文。图片只在本机识别，不会上传",
-        "Chinese text goes to English instead. The image is read on this PC and never uploaded");
+    public static string ScreenshotTarget => T("划词和截图翻译成", "Reading and screenshots translate to");
+    public static string ScreenshotTargetNote => T("划词翻译和截图翻译共用；原文如果本身是中文，会翻译成英文。图片只在本机识别，不会上传",
+        "Shared by reading and screenshot translation; Chinese text goes to English instead. Images are read on this PC and never uploaded");
     public static string ShortcutsSection => T("快捷键", "Shortcuts");
     public static string PolishShortcut => T("润色", "Polish");
     public static string PolishShortcutNote => T("选中文字后按下，润色后可替换原文", "Polish the selected text, then replace it");

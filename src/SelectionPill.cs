@@ -20,7 +20,7 @@ namespace ZnKeyboard;
 /// Shows 润色 | AI 翻译为 [EN ▾] next to text the user selects in an editable field: after a mouse
 /// drag, double or triple click (at the pointer), or Ctrl+A / Shift+arrows (under the selection,
 /// where the app reports it). Text selected with the mouse while reading (a web page, a document)
-/// gets 翻译为 [EN ▾] alone, with its own language. Typing, clicking elsewhere or switching windows
+/// gets 翻译为 [ZH ▾] alone, into the reading language screenshots use. Typing, clicking elsewhere or switching windows
 /// hides it. The pill never takes focus, so the selection stays where it is. Nothing is read or
 /// sent until a button is clicked.
 /// </summary>
@@ -287,7 +287,7 @@ public sealed class SelectionPill : IDisposable
         reading = readingText;
         polishButton.Visibility = divider.Visibility = reading ? Visibility.Collapsed : Visibility.Visible;
         translateButton.Content = reading ? L.ReadShort : L.TranslateShort;
-        var target = reading ? settings.ReadingLanguage : settings.Target;
+        var target = reading ? settings.ReadTarget : settings.Target;
         chipText.Text = target.Code;
         polishButton.ToolTip = $"{L.Polish}  {settings.ShortcutFor(ShortcutAction.Polish).Display}";
         translateButton.ToolTip = reading
@@ -305,13 +305,13 @@ public sealed class SelectionPill : IDisposable
     {
         var menu = new ContextMenu { PlacementTarget = chip, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom };
         var settings = Settings.Current;
-        var current = reading ? settings.ReadingTarget : settings.TranslateTarget;
+        var current = reading ? settings.ScreenshotTarget : settings.TranslateTarget;
         foreach (var language in Languages.All)
         {
             var item = new MenuItem { Header = language.Label, IsCheckable = true, IsChecked = language.Code == current };
             item.Click += (_, _) =>
             {
-                if (reading) settings.ReadingTarget = language.Code; else settings.TranslateTarget = language.Code;
+                if (reading) settings.ScreenshotTarget = language.Code; else settings.TranslateTarget = language.Code;
                 settings.Save();
                 chipText.Text = language.Code;
             };

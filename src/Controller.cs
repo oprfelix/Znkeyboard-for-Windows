@@ -66,7 +66,7 @@ public sealed class Controller
         var reading = mode.IsRead;
         panel.OnLanguageChange = language =>
         {
-            if (reading) Settings.Current.ReadingTarget = language.Code; else Settings.Current.TranslateTarget = language.Code;
+            if (reading) Settings.Current.ScreenshotTarget = language.Code; else Settings.Current.TranslateTarget = language.Code;
             Settings.Current.Save();
             Process(selection, reading ? RewriteMode.Read(language) : RewriteMode.Translate(language), client);
         };
@@ -148,8 +148,8 @@ public sealed class Controller
         {
             var result = await client.RewriteAsync(core, mode, cancel.Token);
             if (cancel.IsCancellationRequested || !panel.IsVisible) return;
-            // A screenshot's text is shown above its translation; selected text is still on screen.
-            if (mode.IsRead) panel.ShowResult(result, recognised: mode.FromScreenshot ? selection : null);
+            // The original shows above the translation, to copy as well (a screenshot's text especially).
+            if (mode.IsRead) panel.ShowResult(result, recognised: selection);
             // Keep the selection's surrounding spaces and line breaks so the paste fits back in.
             else panel.ShowResult(leading + result + trailing);
         }
