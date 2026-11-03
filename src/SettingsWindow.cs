@@ -200,13 +200,14 @@ public sealed class SettingsWindow : FluentWindow
         var settings = Settings.Current;
         PageTitle(L.UsageSection);
 
+        GroupHeader(L.LanguagesGroup, first: true);
         var target = Combo(Languages.All.Select(l => l.Label).ToArray(), Languages.All.ToList().FindIndex(l => l.Code == settings.TranslateTarget));
         target.SelectionChanged += (_, _) =>
         {
             settings.TranslateTarget = Languages.All[target.SelectedIndex].Code;
             settings.Save();
         };
-        page.Children.Add(Card(SymbolRegular.Translate24, L.TranslateMenu, L.TranslateTargetNote, target));
+        page.Children.Add(Card(SymbolRegular.Translate24, L.TranslateTarget, L.TranslateTargetNote, target));
 
         var reading = Combo(Languages.All.Select(l => l.Label).ToArray(), Languages.All.ToList().FindIndex(l => l.Code == settings.ScreenshotTarget));
         reading.SelectionChanged += (_, _) =>
@@ -216,13 +217,14 @@ public sealed class SettingsWindow : FluentWindow
         };
         page.Children.Add(Card(SymbolRegular.ScanText24, L.ScreenshotTarget, L.ScreenshotTargetNote, reading));
 
+        GroupHeader(L.ButtonsGroup);
         var pill = new ToggleSwitch { IsChecked = settings.SelectionPill };
         pill.Click += (_, _) => { settings.SelectionPill = pill.IsChecked == true; settings.Save(); };
         page.Children.Add(Card(SymbolRegular.DesktopCursor24, L.SelectionPill, L.SelectionPillNote, pill));
 
         var readingPill = new ToggleSwitch { IsChecked = settings.ReadingPill };
         readingPill.Click += (_, _) => { settings.ReadingPill = readingPill.IsChecked == true; settings.Save(); };
-        page.Children.Add(Card(SymbolRegular.TextEditStyle24, L.ReadingPill, L.ReadingPillNote, readingPill));
+        page.Children.Add(Card(SymbolRegular.DocumentText24, L.ReadingPill, L.ReadingPillNote, readingPill));
     }
 
     private void BuildShortcuts()
@@ -503,6 +505,15 @@ public sealed class SettingsWindow : FluentWindow
             Padding = new Thickness(16, 14, 16, 14),
         };
     }
+
+    /// <summary>A small heading over a group of cards, like the Windows 11 Settings app.</summary>
+    private void GroupHeader(string text, bool first = false) => page.Children.Add(new TextBlock
+    {
+        Text = text,
+        FontSize = 14,
+        FontWeight = FontWeights.SemiBold,
+        Margin = new Thickness(2, first ? 0 : 20, 0, 8),
+    });
 
     private void Footnote(string text)
     {

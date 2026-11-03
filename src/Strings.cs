@@ -16,9 +16,9 @@ public static class L
 
     // Tray menu
     public static string Polish => T("润色", "Polish");
-    public static string PolishSelection => T("润色所选文字", "Polish Selected Text");
-    public static string TranslateTo(TranslateLanguage language) => T($"AI 翻译为 {language.DisplayName}", $"Translate to {language.DisplayName}");
-    public static string TranslateMenu => T("翻译成", "Translate To");
+    public static string PolishSelection => T("润色选中文字", "Polish Selection");
+    public static string TranslateTo(TranslateLanguage language) => T($"AI 翻译成{language.DisplayName}", $"Translate to {language.DisplayName}");
+    public static string TranslateMenu => T("AI 翻译的语言", "Translation Language");
     public static string TranslateShort => T("AI 翻译为", "Translate to");
     public static string SettingsMenu => T("设置…", "Settings…");
     public static string Quit => T("退出 ZnKeyboard", "Quit ZnKeyboard");
@@ -102,7 +102,7 @@ public static class L
     public static string NoDeepSeekKeyYet => T("还没有 Key？在 DeepSeek 开放平台获取 ↗", "No key yet? Get one on the DeepSeek platform ↗");
     public static string KeyChecking => T("正在验证 API Key…", "Checking the API key…");
     public static string KeyWorks => T("API Key 可用", "API key works");
-    public static string KeyStoredNote => T("Key 保存在 Windows 凭据管理器，粘贴后自动保存并验证。", "Saved in Windows Credential Manager; pasted keys save and check themselves.");
+    public static string KeyStoredNote => T("粘贴后自动保存并验证，安全存放在 Windows 凭据管理器", "Saves and checks itself once pasted; kept safe in Windows Credential Manager");
     public static string KeyInvalid => T("API Key 无效或没有权限，请检查是否复制完整、是否已过期。", "This API key was rejected. Check it was copied in full and is still active.");
     public static string KeyUnverified(string reason) => T($"暂时无法验证 API Key：{reason}", $"Couldn't check the API key: {reason}");
     public static string Model => T("模型", "Model");
@@ -110,10 +110,10 @@ public static class L
     public static string GeminiNote => T("只提供速度快、费用低的 Flash-Lite 模型。润色或翻译时，选中的文字会发给 Google Gemini。",
         "Only the fast, low-cost Flash-Lite models. When you polish or translate, the selected text is sent to Google Gemini.");
     public static string ProviderNote => T("润色、翻译用哪家 AI 服务", "Which AI service polishes and translates");
-    public static string ApiPresetNote => T("DeepSeek 地址已内置；自定义可接其他兼容服务", "DeepSeek's address is built in; Custom takes any compatible service");
+    public static string ApiPresetNote => T("DeepSeek 已内置；选「自定义」可接其他兼容服务", "DeepSeek is built in; choose Custom for another compatible service");
     public static string ApiBaseUrlNote => T("以 https:// 开头", "Starts with https://");
     public static string ModelNote => T("润色和翻译使用的模型", "The model that polishes and translates");
-    public static string ApiPreset => T("接口", "Endpoint");
+    public static string ApiPreset => T("服务地址", "Endpoint");
     public static string CustomPreset => T("自定义", "Custom");
     public static string DeepSeekNote => T("地址已内置，填好 API Key 就能用，国内可直连。润色或翻译时，选中的文字会发给 DeepSeek。",
         "The address is built in, so a key is all you need; fast in mainland China. When you polish or translate, the selected text is sent to DeepSeek.");
@@ -121,28 +121,29 @@ public static class L
         "Works with OpenAI, OpenRouter and other compatible services: enter their API address and model. When you polish or translate, the selected text is sent to that service.");
 
     public static string UsageSection => T("使用", "Usage");
-    public static string SelectionPill => T("输入框中选中文字后显示按钮", "Buttons on text selected in a text box");
-    public static string SelectionPillNote => T("在输入框里拖选、双击或按 Ctrl+A 全选后，旁边会出现「润色」和「AI 翻译为」按钮",
-        "Drag over text in a text box, double-click or press Ctrl+A, and Polish and Translate buttons appear beside it");
-    public static string ReadingPill => T("划词翻译", "Translate text you select while reading");
-    public static string ReadingPillNote => T("在网页、文档里用鼠标选中文字后，旁边会出现「翻译为」按钮",
-        "Select text on a web page or in a document with the mouse, and a Translate button appears beside it");
+    public static string LanguagesGroup => T("翻译语言", "Languages");
+    public static string ButtonsGroup => T("选中文字时显示按钮", "Show buttons on selected text");
+    public static string SelectionPill => T("输入框", "In text boxes");
+    public static string SelectionPillNote => T("润色、AI 翻译", "Polish and Translate");
+    public static string ReadingPill => T("网页和文档", "On web pages and documents");
+    public static string ReadingPillNote => T("划词翻译", "Translate what you read");
     public static string ReadShort => T("翻译为", "Translate to");
-    public static string PinCard => T("固定：点击别处时不关闭", "Pin: stay open when clicking elsewhere");
-    public static string UnpinCard => T("取消固定：点击别处时关闭", "Unpin: close when clicking elsewhere");
-    public static string TranslateTargetNote => T("「AI 翻译为」默认翻译成的语言", "What Translate turns your text into");
-    public static string ScreenshotTarget => T("划词和截图翻译成", "Reading and screenshots translate to");
-    public static string ScreenshotTargetNote => T("划词翻译和截图翻译共用；原文如果本身是中文，会翻译成英文。图片只在本机识别，不会上传",
-        "Shared by reading and screenshot translation; Chinese text goes to English instead. Images are read on this PC and never uploaded");
+    public static string PinCard => T("固定，点别处时不关闭", "Pin to keep it open");
+    public static string UnpinCard => T("取消固定", "Unpin");
+    public static string TranslateTarget => T("AI 翻译成", "Translate to");
+    public static string TranslateTargetNote => T("用于输入框里的「AI 翻译」", "For Translate in text boxes");
+    public static string ScreenshotTarget => T("划词和截图翻译成", "Reading and screenshots to");
+    public static string ScreenshotTargetNote => T("原文是中文时翻成英文；图片只在本机识别，不会上传",
+        "Chinese text goes to English. Images are read on this PC and never uploaded");
     public static string ShortcutsSection => T("快捷键", "Shortcuts");
     public static string PolishShortcut => T("润色", "Polish");
-    public static string PolishShortcutNote => T("选中文字后按下，润色后可替换原文", "Polish the selected text, then replace it");
+    public static string PolishShortcutNote => T("润色选中的文字", "Polish the selected text");
     public static string TranslateShortcut => T("AI 翻译", "Translate");
-    public static string TranslateShortcutNote => T("选中文字后按下，翻译成目标语言", "Translate the selected text into the target language");
+    public static string TranslateShortcutNote => T("把选中的文字翻译成「AI 翻译成」的语言", "Translate the selected text");
     public static string ScreenshotShortcut => T("截图翻译", "Screenshot translate");
-    public static string ScreenshotShortcutNote => T("按下后拖出屏幕上要翻译的区域", "Drag over the part of the screen to translate");
-    public static string ShortcutsNote => T("按钮不出现的程序里也能用快捷键。点击快捷键后按下新的组合即可修改，Esc 取消。",
-        "Shortcuts work even where the buttons don't appear. Click one, then press the new combination; Esc cancels.");
+    public static string ScreenshotShortcutNote => T("按下后框选屏幕上要翻译的区域", "Then drag over the part of the screen to translate");
+    public static string ShortcutsNote => T("没有按钮的程序里也能用快捷键。点一下快捷键，再按新的组合键即可修改；Esc 取消。",
+        "Shortcuts work even where no buttons appear. Click one, then press the new keys; Esc cancels.");
     public static string PressShortcut => T("按下新快捷键…", "Press keys…");
     public static string ResetDefault => T("恢复默认", "Reset");
     public static string NeedModifier => T("需要包含 Ctrl、Alt 或 Win 中的至少一个。", "Include at least one of Ctrl, Alt or Win.");

@@ -289,6 +289,7 @@ public sealed class SelectionPill : IDisposable
         translateButton.Content = reading ? L.ReadShort : L.TranslateShort;
         var target = reading ? settings.ReadTarget : settings.Target;
         chipText.Text = target.Code;
+        chip.ToolTip = reading ? L.ScreenshotTarget : L.TranslateMenu;
         polishButton.ToolTip = $"{L.Polish}  {settings.ShortcutFor(ShortcutAction.Polish).Display}";
         translateButton.ToolTip = reading
             ? $"{L.ReadShort} {target.DisplayName}"
