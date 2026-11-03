@@ -230,9 +230,10 @@ public sealed class SettingsWindow : FluentWindow
     private void BuildShortcuts()
     {
         PageTitle(L.ShortcutsSection);
+        page.Children.Add(Card(SymbolRegular.DocumentText24, L.ReadShortcut, L.ReadShortcutNote, Recorder(ShortcutAction.Read)));
+        page.Children.Add(Card(SymbolRegular.ScanText24, L.ScreenshotShortcut, L.ScreenshotShortcutNote, Recorder(ShortcutAction.Screenshot)));
         page.Children.Add(Card(SymbolRegular.Sparkle24, L.PolishShortcut, L.PolishShortcutNote, Recorder(ShortcutAction.Polish)));
         page.Children.Add(Card(SymbolRegular.Translate24, L.TranslateShortcut, L.TranslateShortcutNote, Recorder(ShortcutAction.Translate)));
-        page.Children.Add(Card(SymbolRegular.ScanText24, L.ScreenshotShortcut, L.ScreenshotShortcutNote, Recorder(ShortcutAction.Screenshot)));
         Footnote(L.ShortcutsNote);
     }
 

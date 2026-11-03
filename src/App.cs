@@ -120,6 +120,7 @@ public sealed class App : Application
         {
             case ShortcutAction.Polish: controller!.Run(RewriteMode.Polish); break;
             case ShortcutAction.Translate: controller!.Run(RewriteMode.Translate(Settings.Current.Target)); break;
+            case ShortcutAction.Read: controller!.Run(RewriteMode.Read(Settings.Current.ReadTarget)); break;
             default: controller!.RunScreenshot(); break;
         }
     }
@@ -156,9 +157,10 @@ public sealed class App : Application
             menu.Items.Add(Item(L.NewVersionMenu(release.Version), '\uE896', () => Updates.Install(release)));
             menu.Items.Add(new Forms.ToolStripSeparator());
         }
+        menu.Items.Add(Item(L.ReadSelection, '', () => RunFromMenu(ShortcutAction.Read), settings.ShortcutFor(ShortcutAction.Read)));
+        menu.Items.Add(Item(L.ScreenshotTranslate, '', () => RunFromMenu(ShortcutAction.Screenshot), settings.ShortcutFor(ShortcutAction.Screenshot)));
         menu.Items.Add(Item(L.PolishSelection, '', () => RunFromMenu(ShortcutAction.Polish), settings.ShortcutFor(ShortcutAction.Polish)));
         menu.Items.Add(Item(L.TranslateTo(settings.Target), '', () => RunFromMenu(ShortcutAction.Translate), settings.ShortcutFor(ShortcutAction.Translate)));
-        menu.Items.Add(Item(L.ScreenshotTranslate, '', () => RunFromMenu(ShortcutAction.Screenshot), settings.ShortcutFor(ShortcutAction.Screenshot)));
         var languages = new Forms.ToolStripMenuItem(L.TranslateMenu);
         foreach (var language in Languages.All)
         {

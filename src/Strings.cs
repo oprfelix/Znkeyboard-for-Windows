@@ -17,6 +17,7 @@ public static class L
     // Tray menu
     public static string Polish => T("润色", "Polish");
     public static string PolishSelection => T("润色选中文字", "Polish Selection");
+    public static string ReadSelection => T("划词翻译", "Translate Selection");
     public static string TranslateTo(TranslateLanguage language) => T($"AI 翻译成{language.DisplayName}", $"Translate to {language.DisplayName}");
     public static string TranslateMenu => T("AI 翻译的语言", "Translation Language");
     public static string TranslateShort => T("AI 翻译为", "Translate to");
@@ -141,6 +142,8 @@ public static class L
     public static string TranslateShortcut => T("AI 翻译", "Translate");
     public static string TranslateShortcutNote => T("把选中的文字翻译成「AI 翻译成」的语言", "Translate the selected text");
     public static string ScreenshotShortcut => T("截图翻译", "Screenshot translate");
+    public static string ReadShortcut => T("划词翻译", "Translate selection");
+    public static string ReadShortcutNote => T("把选中的文字翻译成「划词和截图翻译成」的语言，网页、文档里都能用", "Translate the selected text to read, on web pages and documents too");
     public static string ScreenshotShortcutNote => T("按下后框选屏幕上要翻译的区域", "Then drag over the part of the screen to translate");
     public static string ShortcutsNote => T("没有按钮的程序里也能用快捷键。点一下快捷键，再按新的组合键即可修改；Esc 取消。",
         "Shortcuts work even where no buttons appear. Click one, then press the new keys; Esc cancels.");

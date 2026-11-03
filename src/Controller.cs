@@ -79,7 +79,7 @@ public sealed class Controller
     /// Screenshot translation: drag over part of the screen, read its text on this PC, and translate
     /// it to read. Text already in the reading language (Chinese by default) goes to English instead.
     /// </summary>
-    /// <summary>Set while the screen is dimmed for dragging; another Ctrl+Alt+E then does nothing.</summary>
+    /// <summary>Set while the screen is dimmed for dragging; another screenshot shortcut then does nothing.</summary>
     private bool capturing;
 
     public async void RunScreenshot()

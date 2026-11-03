@@ -292,7 +292,7 @@ public sealed class SelectionPill : IDisposable
         chip.ToolTip = reading ? L.ScreenshotTarget : L.TranslateMenu;
         polishButton.ToolTip = $"{L.Polish}  {settings.ShortcutFor(ShortcutAction.Polish).Display}";
         translateButton.ToolTip = reading
-            ? $"{L.ReadShort} {target.DisplayName}"
+            ? $"{L.ReadShort} {target.DisplayName}  {settings.ShortcutFor(ShortcutAction.Read).Display}"
             : $"{L.TranslateShort} {target.DisplayName}  {settings.ShortcutFor(ShortcutAction.Translate).Display}";
         var scale = Native.ScaleAt(anchor);
         window.Left = anchor.X / scale - 4;

@@ -14,7 +14,8 @@ public enum Provider { Gemini, OpenAICompatible }
 /// <summary>Endpoints the OpenAI-compatible provider offers without typing an address.</summary>
 public enum ApiPreset { DeepSeek, Custom }
 
-public enum ShortcutAction { Polish, Translate, Screenshot }
+/// <summary>New actions go last: each one's hot key id is its number.</summary>
+public enum ShortcutAction { Polish, Translate, Screenshot, Read }
 
 /// <summary>A global shortcut: Win32 MOD_* flags, a virtual-key code, and the key's name ("R", "F5").</summary>
 public sealed record Shortcut(int Modifiers, int Key, string KeyName)
@@ -36,12 +37,13 @@ public sealed record Shortcut(int Modifiers, int Key, string KeyName)
 
     public bool Collides(Shortcut other) => Modifiers == other.Modifiers && Key == other.Key;
 
-    /// <summary>Ctrl+Alt+R / T / E: the same letters as ⇧⌘R / T / E on the Mac.</summary>
+    /// <summary>Ctrl+Shift+1 reading, 2 screenshot, E polish, R translate: the Mac's ⇧⌘ keys.</summary>
     public static Shortcut Default(ShortcutAction action) => action switch
     {
-        ShortcutAction.Polish => new Shortcut(Control | Alt, 0x52, "R"),
-        ShortcutAction.Translate => new Shortcut(Control | Alt, 0x54, "T"),
-        _ => new Shortcut(Control | Alt, 0x45, "E"),
+        ShortcutAction.Read => new Shortcut(Control | Shift, 0x31, "1"),
+        ShortcutAction.Screenshot => new Shortcut(Control | Shift, 0x32, "2"),
+        ShortcutAction.Polish => new Shortcut(Control | Shift, 0x45, "E"),
+        _ => new Shortcut(Control | Shift, 0x52, "R"),
     };
 }
 
@@ -84,6 +86,7 @@ public sealed class Settings
     public Shortcut? PolishShortcut { get; set; }
     public Shortcut? TranslateShortcut { get; set; }
     public Shortcut? ScreenshotShortcut { get; set; }
+    public Shortcut? ReadShortcut { get; set; }
 
     // Static fields initialise in the order they are written, so the paths must come before Current:
     // until 0.6.0 Load() ran while FilePath was still null, never read the file, and the next Save()
@@ -178,7 +181,8 @@ public sealed class Settings
     {
         ShortcutAction.Polish => PolishShortcut,
         ShortcutAction.Translate => TranslateShortcut,
-        _ => ScreenshotShortcut,
+        ShortcutAction.Screenshot => ScreenshotShortcut,
+        _ => ReadShortcut,
     } ?? Shortcut.Default(action);
 
     public void SetShortcut(ShortcutAction action, Shortcut shortcut)
@@ -187,7 +191,8 @@ public sealed class Settings
         {
             case ShortcutAction.Polish: PolishShortcut = shortcut; break;
             case ShortcutAction.Translate: TranslateShortcut = shortcut; break;
-            default: ScreenshotShortcut = shortcut; break;
+            case ShortcutAction.Screenshot: ScreenshotShortcut = shortcut; break;
+            default: ReadShortcut = shortcut; break;
         }
         Save();
     }

@@ -9,8 +9,9 @@ default) or a custom address, each with its own key in Windows Credential Manage
 - Reading translation (off by default, Settings → Usage): select text on a web page or in a document with the
   mouse and 翻译为 [ZH ▾] appears; it translates faithfully into the reading language screenshots use, and
   the card shows the original above the translation, each to copy.
-- **Ctrl+Alt+R** polish the selected text · **Ctrl+Alt+T** translate it (both changeable in Settings)
-- **Ctrl+Alt+E** screenshot translate: drag over part of the screen; its text is recognised on this PC
+- **Ctrl+Shift+1** translate the selection to read · **Ctrl+Shift+E** polish it · **Ctrl+Shift+R** translate it
+  (all changeable in Settings)
+- **Ctrl+Shift+2** screenshot translate: drag over part of the screen; its text is recognised on this PC
   (Windows OCR) and translated faithfully into your reading language (Simplified Chinese by default;
   Chinese text goes to English). The image never leaves the PC.
 - A card near the pointer shows the result: **Enter** replaces the selection, **Esc** cancels, **Ctrl+C** copies. When translating, its header switches the target language and translates again.
