@@ -82,7 +82,11 @@ public sealed class App : Application
             ContextMenuStrip = new Forms.ContextMenuStrip { ShowImageMargin = true },
         };
         tray.ContextMenuStrip.Opening += (_, _) => BuildMenu();
-        tray.DoubleClick += (_, _) => ShowSettings();
+        // On release, as Windows' own tray icons do; a second click of a double click only finds it open.
+        tray.MouseUp += (_, click) =>
+        {
+            if (click.Button == Forms.MouseButtons.Left) ShowSettings();
+        };
         RefreshTray();
         if (atSignIn) AddTrayIconAgain();
 
@@ -110,8 +114,8 @@ public sealed class App : Application
         tray.BalloonTipClosed += (_, _) => pendingUpdateBalloon = false;
         Updates.StartAutomaticChecks();
 
-        // First run: nothing works without a key, so start where it goes.
-        if (string.IsNullOrEmpty(Credentials.Read(Settings.Current.Provider))) ShowSettings();
+        // First run: nothing works without a key, so start where it goes. A reinstall may still have one.
+        if (e.Args.Contains(Installer.InstalledArg) || string.IsNullOrEmpty(Credentials.Read(Settings.Current.Provider))) ShowSettings();
     }
 
     /// <summary>
@@ -214,8 +218,18 @@ public sealed class App : Application
     private static Forms.ToolStripMenuItem Item(string text, char? glyph, Action action, Shortcut? shortcut = null) =>
         new(text, glyph is { } g ? Glyph(g) : null, (_, _) => action()) { ShortcutKeyDisplayString = shortcut?.Display };
 
+    // The menu is rebuilt on every open, on the thread that also serves the mouse hook, and listing
+    // the installed fonts is slow: drawn once.
+    private static readonly System.Collections.Generic.Dictionary<char, Bitmap?> Glyphs = new();
+
     /// <summary>A Fluent icon from Windows' own icon font (Segoe Fluent Icons on 11, Segoe MDL2 Assets on 10).</summary>
     private static Bitmap? Glyph(char glyph)
+    {
+        if (!Glyphs.TryGetValue(glyph, out var bitmap)) Glyphs[glyph] = bitmap = DrawGlyph(glyph);
+        return bitmap;
+    }
+
+    private static Bitmap? DrawGlyph(char glyph)
     {
         try
         {

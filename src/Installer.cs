@@ -214,8 +214,12 @@ public static class Installer
         return new Version(info.FileMajorPart, info.FileMinorPart, info.FileBuildPart);
     }
 
-    private static void Start(string path, string? argument) =>
+    private static void Start(string path, string? argument)
+    {
+        // This process was opened by the user; lets the copy it starts bring Settings to the front.
+        Native.AllowSetForegroundWindow(Native.ASFW_ANY);
         Process.Start(new ProcessStartInfo(path) { UseShellExecute = false, Arguments = argument ?? "", WorkingDirectory = InstallFolder });
+    }
 
     private static bool SamePath(string a, string b) =>
         string.Equals(Path.GetFullPath(a), Path.GetFullPath(b), StringComparison.OrdinalIgnoreCase);
