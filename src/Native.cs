@@ -25,6 +25,11 @@ internal static class Native
     [DllImport("user32.dll")]
     public static extern bool SetForegroundWindow(IntPtr hWnd);
 
+    public const int ASFW_ANY = -1;
+
+    [DllImport("user32.dll")]
+    public static extern bool AllowSetForegroundWindow(int processId);
+
     [DllImport("user32.dll")]
     public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
 

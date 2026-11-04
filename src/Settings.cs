@@ -217,24 +217,43 @@ public sealed class Settings
 
     // Start with Windows, through the current user's Run key (no admin rights needed).
     private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
+    // What Task Manager, Settings → Apps → Startup and security tools turned off: a value named like
+    // the Run entry, odd first byte. Windows skips such an entry, however long it stays in the Run key.
+    private const string StartupApprovedKey = @"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run";
+    private const string StartupName = "ZnKeyboard";
 
     public static bool StartsWithWindows
     {
         get
         {
             using var key = Registry.CurrentUser.OpenSubKey(RunKey);
-            return key?.GetValue("ZnKeyboard") is string;
+            using var approved = Registry.CurrentUser.OpenSubKey(StartupApprovedKey);
+            var turnedOff = approved?.GetValue(StartupName) is byte[] { Length: > 0 } state && (state[0] & 1) != 0;
+            return key?.GetValue(StartupName) is string && !turnedOff;
         }
         set => SetStartWithWindows(value ? Environment.ProcessPath : null);
     }
 
-    /// <summary>Starts <paramref name="exe"/> with Windows, or nothing when null.</summary>
+    /// <summary>Starts <paramref name="exe"/> with Windows, or nothing when null; either way an earlier "turned off" is gone.</summary>
     public static void SetStartWithWindows(string? exe)
     {
-        using var key = Registry.CurrentUser.CreateSubKey(RunKey);
-        if (exe != null) key.SetValue("ZnKeyboard", $"\"{exe}\"");
-        else key.DeleteValue("ZnKeyboard", throwOnMissingValue: false);
+        using (var key = Registry.CurrentUser.CreateSubKey(RunKey))
+        {
+            if (exe != null) key.SetValue(StartupName, StartupCommand(exe));
+            else key.DeleteValue(StartupName, throwOnMissingValue: false);
+        }
+        using var approved = Registry.CurrentUser.OpenSubKey(StartupApprovedKey, writable: true);
+        approved?.DeleteValue(StartupName, throwOnMissingValue: false);
     }
+
+    /// <summary>Points an existing entry at <paramref name="exe"/>, leaving alone whether it is turned on.</summary>
+    public static void UpdateStartWithWindows(string exe)
+    {
+        using var key = Registry.CurrentUser.OpenSubKey(RunKey, writable: true);
+        if (key?.GetValue(StartupName) is string) key.SetValue(StartupName, StartupCommand(exe));
+    }
+
+    private static string StartupCommand(string exe) => $"\"{exe}\" {Installer.StartupArg}";
 }
 
 /// <summary>Gemini is limited to Flash-Lite 2.5 and newer, as on Android and macOS.</summary>

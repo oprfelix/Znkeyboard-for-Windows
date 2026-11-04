@@ -21,11 +21,15 @@ public static class Installer
     /// <summary>Passed by the in-app updater to the exe it downloaded, and on (as AutoUpdatedArg) to the installed copy.</summary>
     public const string AutoUpdateArg = "--auto-update";
     public const string AutoUpdatedArg = "--auto-updated";
+    /// <summary>Passed by Windows at sign-in, through the Run entry.</summary>
+    public const string StartupArg = "--startup";
     private const string UninstallArg = "--uninstall";
     // Runs where it is, for testing a build without installing it.
     private const string PortableArg = "--portable";
     // Set by a running copy; the installer and uninstaller signal it to quit.
     public const string QuitEventName = "ZnKeyboard.Quit";
+    // Set by a second launch, which leaves the running copy to answer it.
+    public const string ShowEventName = "ZnKeyboard.Show";
 
     private const string UninstallKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\ZnKeyboard";
 
@@ -71,7 +75,8 @@ public static class Installer
             Register();
             // A fresh install starts with Windows, like other tray tools; an update keeps the choice
             // and moves a Run entry that pointed at the old download.
-            if (fresh || Settings.StartsWithWindows) Settings.SetStartWithWindows(InstalledExe);
+            if (fresh) Settings.SetStartWithWindows(InstalledExe);
+            else Settings.UpdateStartWithWindows(InstalledExe);
         }
         catch (Exception error)
         {

@@ -21,15 +21,26 @@ public sealed class App : Application
     private SelectionPill? pill;
     private SettingsWindow? settingsWindow;
     private EventWaitHandle? quitSignal;
+    private EventWaitHandle? showSignal;
     private bool pendingUpdateBalloon;
 
     [STAThread]
     public static void Main(string[] args)
     {
+        AppDomain.CurrentDomain.UnhandledException += (_, e) => DebugLog.Note($"crashed: {e.ExceptionObject}");
         if (!Installer.Prepare(args)) return;
         // One copy at a time: a second launch would fight over the shortcuts.
         using var mutex = new Mutex(initiallyOwned: true, "ZnKeyboard.SingleInstance", out var first);
-        if (!first) return;
+        if (!first)
+        {
+            // Opened by hand, it may be running with its tray icon out of sight: show that it is.
+            if (!args.Contains(Installer.StartupArg) && EventWaitHandle.TryOpenExisting(Installer.ShowEventName, out var show))
+            {
+                Native.AllowSetForegroundWindow(Native.ASFW_ANY);
+                using (show) show.Set();
+            }
+            return;
+        }
         var app = new App { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         app.Run();
     }
@@ -37,6 +48,9 @@ public sealed class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        var atSignIn = e.Args.Contains(Installer.StartupArg);
+        DebugLog.Note($"started {Updates.CurrentVersion}" + (atSignIn ? " at sign-in" : ""));
+        DispatcherUnhandledException += (_, error) => DebugLog.Note($"crashed: {error.Exception}");
         // WPF-UI's Fluent styles and colours for every window, following Windows' light or dark mode.
         var theme = ApplicationThemeManager.GetSystemTheme() == SystemTheme.Dark ? ApplicationTheme.Dark : ApplicationTheme.Light;
         Resources.MergedDictionaries.Add(new ThemesDictionary { Theme = theme });
@@ -70,10 +84,13 @@ public sealed class App : Application
         tray.ContextMenuStrip.Opening += (_, _) => BuildMenu();
         tray.DoubleClick += (_, _) => ShowSettings();
         RefreshTray();
+        if (atSignIn) AddTrayIconAgain();
 
         // A newer download installing over this copy asks it to step aside.
         quitSignal = new EventWaitHandle(false, EventResetMode.AutoReset, Installer.QuitEventName);
         ThreadPool.RegisterWaitForSingleObject(quitSignal, (_, _) => Dispatcher.BeginInvoke(() => Shutdown()), null, Timeout.Infinite, executeOnlyOnce: true);
+        showSignal = new EventWaitHandle(false, EventResetMode.AutoReset, Installer.ShowEventName);
+        ThreadPool.RegisterWaitForSingleObject(showSignal, (_, _) => Dispatcher.BeginInvoke(() => ShowSettings()), null, Timeout.Infinite, executeOnlyOnce: false);
 
         if (e.Args.Contains(Installer.InstalledArg)) tray.ShowBalloonTip(5000, L.InstalledTitle, L.InstalledNote, Forms.ToolTipIcon.Info);
         else if (e.Args.Contains(Installer.UpdatedArg)) tray.ShowBalloonTip(5000, L.UpdatedTitle(Updates.CurrentVersion), L.UpdatedNote, Forms.ToolTipIcon.Info);
@@ -95,6 +112,20 @@ public sealed class App : Application
 
         // First run: nothing works without a key, so start where it goes.
         if (string.IsNullOrEmpty(Credentials.Read(Settings.Current.Provider))) ShowSettings();
+    }
+
+    /// <summary>
+    /// A busy taskbar can drop the icon at sign-in without saying so, and NotifyIcon only adds it
+    /// again after Explorer restarts. Done before the first update check can show a notification.
+    /// </summary>
+    private async void AddTrayIconAgain()
+    {
+        foreach (var seconds in new[] { 5, 10 })
+        {
+            await System.Threading.Tasks.Task.Delay(TimeSpan.FromSeconds(seconds));
+            tray!.Visible = false;
+            tray.Visible = true;
+        }
     }
 
     protected override void OnExit(ExitEventArgs e)
