@@ -9,9 +9,10 @@ using Microsoft.Win32;
 
 namespace ZnKeyboard;
 
-public enum Provider { Gemini, OpenAICompatible }
+/// <summary>Saved as its number, so new providers go last; the menu's order is <see cref="Settings.ProviderMenu"/>.</summary>
+public enum Provider { Gemini, OpenAICompatible, DeepSeek }
 
-/// <summary>Endpoints the OpenAI-compatible provider offers without typing an address.</summary>
+/// <summary>Through 0.7.4 DeepSeek was a preset of the OpenAI-compatible provider; only the upgrade reads this.</summary>
 public enum ApiPreset { DeepSeek, Custom }
 
 /// <summary>New actions go last: each one's hot key id is its number.</summary>
@@ -55,18 +56,24 @@ public sealed class Settings
 {
     public const string DefaultGeminiModel = "gemini-3.5-flash-lite";
     public const string DeepSeekBaseUrl = "https://api.deepseek.com";
-    // The custom preset starts from DeepSeek's address too, so 0.3.x settings without one still work.
-    public const string DefaultOpenAIBaseUrl = DeepSeekBaseUrl;
-    public const string DefaultOpenAIModel = "deepseek-flash";
+    // Where the OpenAI-compatible provider's address starts before the user types their own.
+    public const string DefaultOpenAIBaseUrl = "https://api.openai.com/v1";
+    public const string DefaultDeepSeekModel = "deepseek-flash";
+    /// <summary>The providers in the order the settings menu lists them.</summary>
+    public static readonly Provider[] ProviderMenu = [Provider.DeepSeek, Provider.Gemini, Provider.OpenAICompatible];
 
     public Provider Provider { get; set; } = Provider.Gemini;
-    /// <summary>Unset before presets: then DeepSeek's address (the default) means DeepSeek, anything else custom.</summary>
+    /// <summary>Unset before presets: then DeepSeek's address (or none) means DeepSeek, anything else custom.</summary>
     [JsonConverter(typeof(JsonStringEnumConverter<ApiPreset>))]
     public ApiPreset? Preset { get; set; }
-    /// <summary>The typed address, used by the custom preset.</summary>
-    public string OpenAIBaseUrl { get; set; } = DefaultOpenAIBaseUrl;
+    /// <summary>Whether the DeepSeek preset has moved to its own provider.</summary>
+    public bool DeepSeekPresetSplit { get; set; }
+    /// <summary>The OpenAI-compatible provider's address. Empty until Load, so files without one read as DeepSeek.</summary>
+    public string OpenAIBaseUrl { get; set; } = "";
     public string GeminiModel { get; set; } = DefaultGeminiModel;
-    public string OpenAIModel { get; set; } = DefaultOpenAIModel;
+    public string DeepSeekModel { get; set; } = DefaultDeepSeekModel;
+    /// <summary>No default: a model ID only means something on the address the user typed.</summary>
+    public string OpenAIModel { get; set; } = "";
     public string TranslateTarget { get; set; } = "EN";
     /// <summary>The language translations to read go into: text selected while reading, and screenshots. Kept under its 0.4 name.</summary>
     public string ScreenshotTarget { get; set; } = "ZH";
@@ -123,14 +130,45 @@ public sealed class Settings
                 settings.Provider = Provider.OpenAICompatible;
         }
         // A file edited by hand, or written by another version, may leave these out or null.
-        settings.OpenAIBaseUrl ??= DefaultOpenAIBaseUrl;
+        settings.OpenAIBaseUrl ??= "";
+        settings.OpenAIModel ??= "";
+        settings.SplitDeepSeekPreset();
+        if (string.IsNullOrWhiteSpace(settings.OpenAIBaseUrl)) settings.OpenAIBaseUrl = DefaultOpenAIBaseUrl;
         settings.GeminiModel ??= DefaultGeminiModel;
-        settings.OpenAIModel ??= DefaultOpenAIModel;
+        settings.DeepSeekModel ??= DefaultDeepSeekModel;
         settings.TranslateTarget ??= "EN";
         settings.ScreenshotTarget ??= "ZH";
         settings.UiLanguage ??= "system";
         if (!Enum.IsDefined(settings.Provider)) settings.Provider = Provider.Gemini;
         return settings;
+    }
+
+    /// <summary>
+    /// One-time move of the DeepSeek preset to its own provider, key and model included. The old
+    /// key is removed only once the new one reads back, so a failed write retries next launch.
+    /// </summary>
+    private void SplitDeepSeekPreset()
+    {
+        if (DeepSeekPresetSplit) return;
+        var onDeepSeek = Preset == ApiPreset.DeepSeek
+            || (Preset == null && (string.IsNullOrWhiteSpace(OpenAIBaseUrl) || OpenAIBaseUrl.Contains("api.deepseek.com")));
+        if (onDeepSeek)
+        {
+            var key = Credentials.Read(Provider.OpenAICompatible);
+            if (!string.IsNullOrEmpty(key))
+            {
+                Credentials.Write(Provider.DeepSeek, key);
+                if (Credentials.Read(Provider.DeepSeek) != key.Trim()) return;
+                Credentials.Write(Provider.OpenAICompatible, null);
+            }
+            if (OpenAIModel.StartsWith("deepseek", StringComparison.OrdinalIgnoreCase)) DeepSeekModel = OpenAIModel.Trim();
+            OpenAIModel = "";
+            if (OpenAIBaseUrl.Contains("api.deepseek.com")) OpenAIBaseUrl = "";
+            if (Provider == Provider.OpenAICompatible) Provider = Provider.DeepSeek;
+        }
+        Preset = null;
+        DeepSeekPresetSplit = true;
+        Save();
     }
 
     /// <summary>The settings in <paramref name="path"/>, or null when it is missing or damaged (then copied aside for the log).</summary>
@@ -180,9 +218,22 @@ public sealed class Settings
     public TranslateLanguage Target => Languages.ByCode(TranslateTarget);
 
     /// <summary>The model for <paramref name="provider"/>. Gemini falls back to the default unless a Lite model is saved.</summary>
-    public string ModelFor(Provider provider) => provider == Provider.Gemini
-        ? (GeminiModels.IsLite(GeminiModel) ? GeminiModel : DefaultGeminiModel)
-        : (string.IsNullOrWhiteSpace(OpenAIModel) ? DefaultOpenAIModel : OpenAIModel.Trim());
+    public string ModelFor(Provider provider) => provider switch
+    {
+        Provider.Gemini => GeminiModels.IsLite(GeminiModel) ? GeminiModel : DefaultGeminiModel,
+        Provider.DeepSeek => string.IsNullOrWhiteSpace(DeepSeekModel) ? DefaultDeepSeekModel : DeepSeekModel.Trim(),
+        _ => OpenAIModel.Trim(),
+    };
+
+    public void SetModel(Provider provider, string model)
+    {
+        switch (provider)
+        {
+            case Provider.Gemini: GeminiModel = model; break;
+            case Provider.DeepSeek: DeepSeekModel = model.Trim(); break;
+            default: OpenAIModel = model.Trim(); break;
+        }
+    }
 
     public Shortcut ShortcutFor(ShortcutAction action) => action switch
     {
@@ -207,13 +258,7 @@ public sealed class Settings
     public TranslateLanguage ReadTarget => Languages.ByCode(ScreenshotTarget);
 
     /// <summary>The client for the selected provider and its key, model and endpoint.</summary>
-    public AIClient CreateClient() => new(Provider, CompatibleBaseUrl, Credentials.Read(Provider) ?? "", ModelFor(Provider));
-
-    public ApiPreset EffectivePreset => Preset
-        ?? (string.IsNullOrWhiteSpace(OpenAIBaseUrl) || OpenAIBaseUrl.Contains("api.deepseek.com") ? ApiPreset.DeepSeek : ApiPreset.Custom);
-
-    /// <summary>The address the OpenAI-compatible provider calls: the preset's, or the typed one.</summary>
-    public string CompatibleBaseUrl => EffectivePreset == ApiPreset.DeepSeek ? DeepSeekBaseUrl : OpenAIBaseUrl;
+    public AIClient CreateClient() => new(Provider, Provider == Provider.DeepSeek ? DeepSeekBaseUrl : OpenAIBaseUrl, Credentials.Read(Provider) ?? "", ModelFor(Provider));
 
     // Start with Windows, through the current user's Run key (no admin rights needed).
     private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
@@ -294,10 +339,15 @@ public static class GeminiModels
 /// <summary>API keys in Windows Credential Manager (encrypted for the signed-in user).</summary>
 public static class Credentials
 {
+    // Stays apart from the DeepSeek provider's target: MoveDeepSeekKey empties this one on every launch.
     private const string LegacyDeepSeekTarget = "ZnKeyboard/deepseek-api-key";
 
-    private static string Target(Provider provider) =>
-        provider == Provider.Gemini ? "ZnKeyboard/gemini-api-key" : "ZnKeyboard/openai-api-key";
+    private static string Target(Provider provider) => provider switch
+    {
+        Provider.Gemini => "ZnKeyboard/gemini-api-key",
+        Provider.DeepSeek => "ZnKeyboard/deepseek-provider-key",
+        _ => "ZnKeyboard/openai-api-key",
+    };
 
     public static string? Read(Provider provider) => ReadTarget(Target(provider));
 

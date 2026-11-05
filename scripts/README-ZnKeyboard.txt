@@ -17,7 +17,7 @@
 
 二、设置
 运行后，屏幕右下角托盘区会出现 ZnKeyboard 图标（可能在「^」里），设置窗口会自动打开：
-- 服务商：Google Gemini，或 OpenAI 兼容（接口选「DeepSeek」只需填 API Key；选「自定义」可填其他服务的地址）
+- 服务商：DeepSeek 或 Google Gemini，只需填 API Key；选 OpenAI 兼容可填其他服务的地址和模型
 - API Key：粘贴后会自动保存并验证，下方出现绿点「API Key 可用」就能用了。Key 保存在本机的 Windows 凭据管理器里。
 - 模型、翻译成：按需选择
 - 通用 →「开机自动启动」默认已打开，不需要可以关掉

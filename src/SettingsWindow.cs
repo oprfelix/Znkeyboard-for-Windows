@@ -121,8 +121,8 @@ public sealed class SettingsWindow : FluentWindow
             settings.OpenAIBaseUrl = baseUrlBox.Text.Trim();
             settings.Save();
         }
-        // Only the OpenAI-compatible model is typed; after a provider switch the box belongs to the old one.
-        if (modelBox is { IsEditable: true } box && settings.Provider == Provider.OpenAICompatible && box.Text.Trim() != settings.OpenAIModel) SaveModel(box.Text);
+        // Only Gemini's model is picked from a list; the others are typed.
+        if (modelBox is { IsEditable: true } box && box.Text.Trim() != settings.ModelFor(settings.Provider)) SaveModel(box.Text);
     }
 
     // ---- Pages ----
@@ -132,33 +132,17 @@ public sealed class SettingsWindow : FluentWindow
         var settings = Settings.Current;
         PageTitle(L.AiSection);
 
-        var provider = Combo(new[] { "Google Gemini", L.OpenAICompatible }, (int)settings.Provider);
+        var provider = Combo(new[] { "DeepSeek", "Google Gemini", L.OpenAICompatible }, Array.IndexOf(Settings.ProviderMenu, settings.Provider));
         provider.SelectionChanged += (_, _) =>
         {
             SaveFields();
-            settings.Provider = (Provider)provider.SelectedIndex;
+            settings.Provider = Settings.ProviderMenu[provider.SelectedIndex];
             settings.Save();
             Rebuild();
         };
         page.Children.Add(Card(SymbolRegular.PlugConnected24, L.Provider, L.ProviderNote, provider));
 
         if (settings.Provider == Provider.OpenAICompatible)
-        {
-            var preset = Combo(new[] { "DeepSeek", L.CustomPreset }, (int)settings.EffectivePreset);
-            preset.SelectionChanged += (_, _) =>
-            {
-                SaveFields();
-                settings.Preset = (ApiPreset)preset.SelectedIndex;
-                // A model typed for another service would not exist on DeepSeek.
-                if (settings.Preset == ApiPreset.DeepSeek && !settings.OpenAIModel.StartsWith("deepseek", StringComparison.OrdinalIgnoreCase))
-                    settings.OpenAIModel = Settings.DefaultOpenAIModel;
-                settings.Save();
-                Rebuild();
-            };
-            page.Children.Add(Card(SymbolRegular.Globe24, L.ApiPreset, L.ApiPresetNote, preset));
-        }
-
-        if (settings.Provider == Provider.OpenAICompatible && settings.EffectivePreset == ApiPreset.Custom)
         {
             var baseUrl = new TextBox { Text = settings.OpenAIBaseUrl, Width = 320, PlaceholderText = "https://" };
             baseUrlBox = baseUrl;
@@ -184,14 +168,14 @@ public sealed class SettingsWindow : FluentWindow
         key.LostFocus += (_, _) => SaveKey();
         page.Children.Add(Card(SymbolRegular.ShieldLock24, L.ApiKey, L.KeyStoredNote, new StackPanel { Children = { key, keyStatus } }));
 
-        var model = new ComboBox { IsEditable = settings.Provider == Provider.OpenAICompatible, Width = 320 };
+        var model = new ComboBox { IsEditable = settings.Provider != Provider.Gemini, Width = 320 };
         modelBox = model;
         FillModels(Array.Empty<string>());
         model.SelectionChanged += (_, _) => { if (model.SelectedItem is string id) SaveModel(id); };
         model.LostFocus += (_, _) => { if (model.IsEditable) SaveModel(model.Text); };
         page.Children.Add(Card(SymbolRegular.Bot24, L.Model, L.ModelNote, model));
 
-        Footnote(settings.Provider == Provider.Gemini ? L.GeminiNote : settings.EffectivePreset == ApiPreset.DeepSeek ? L.DeepSeekNote : L.OpenAINote);
+        Footnote(settings.Provider == Provider.Gemini ? L.GeminiNote : settings.Provider == Provider.DeepSeek ? L.DeepSeekNote : L.OpenAINote);
         LoadModels();
     }
 
@@ -288,7 +272,7 @@ public sealed class SettingsWindow : FluentWindow
     {
         var settings = Settings.Current;
         if (string.IsNullOrWhiteSpace(id)) return;
-        if (settings.Provider == Provider.Gemini) settings.GeminiModel = id; else settings.OpenAIModel = id.Trim();
+        settings.SetModel(settings.Provider, id);
         settings.Save();
     }
 
@@ -300,7 +284,7 @@ public sealed class SettingsWindow : FluentWindow
         var current = settings.ModelFor(settings.Provider);
         var options = loaded.ToList();
         if (settings.Provider == Provider.Gemini && !options.Contains(Settings.DefaultGeminiModel)) options.Insert(0, Settings.DefaultGeminiModel);
-        if (!options.Contains(current)) options.Add(current);
+        if (current.Length > 0 && !options.Contains(current)) options.Add(current);
         modelBox.ItemsSource = options;
         modelBox.SelectedItem = current;
         if (modelBox.IsEditable) modelBox.Text = current;
@@ -325,7 +309,7 @@ public sealed class SettingsWindow : FluentWindow
         if (keyStatus == null) return;
         keyStatus.Inlines.Clear();
         var settings = Settings.Current;
-        if (settings.Provider == Provider.OpenAICompatible && settings.EffectivePreset == ApiPreset.Custom) return;
+        if (settings.Provider == Provider.OpenAICompatible) return;
         var gemini = settings.Provider == Provider.Gemini;
         var link = new System.Windows.Documents.Hyperlink(new System.Windows.Documents.Run(gemini ? L.NoKeyYet : L.NoDeepSeekKeyYet))
         {

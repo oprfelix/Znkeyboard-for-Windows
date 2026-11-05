@@ -1,9 +1,9 @@
 # ZnKeyboard for Windows
 
 System tray companion to ZnKeyboard for Android and macOS: polish or translate selected text in any
-Windows app, using the same prompts and 14 target languages. Providers: Google Gemini (Flash-Lite
-models only) or any OpenAI-compatible API, with a DeepSeek preset (address built in, `deepseek-flash` by
-default) or a custom address, each with its own key in Windows Credential Manager.
+Windows app, using the same prompts and 14 target languages. Providers: DeepSeek (address built in,
+`deepseek-flash` by default), Google Gemini (Flash-Lite models only), or any OpenAI-compatible API at
+an address you enter, each with its own key in Windows Credential Manager.
 
 - Select text in a text box (drag, double-click, Ctrl+A) and 润色 | AI 翻译为 [EN ▾] appears beside it.
 - Reading translation (off by default, Settings → Usage): select text on a web page or in a document with the

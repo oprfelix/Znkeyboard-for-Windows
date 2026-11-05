@@ -22,7 +22,7 @@ public sealed record RewriteMode(TranslateLanguage? Target, bool IsRead = false,
     public static RewriteMode Read(TranslateLanguage target, bool fromScreenshot = false) => new(target, true, fromScreenshot);
 }
 
-public enum RewriteFailure { MissingKey, BadEndpoint, TooLong, NoChange, Http, BadResponse, Network }
+public enum RewriteFailure { MissingKey, MissingModel, BadEndpoint, TooLong, NoChange, Http, BadResponse, Network }
 
 public sealed class RewriteException(RewriteFailure failure, int status = 0, string body = "") : Exception(body)
 {
@@ -34,6 +34,7 @@ public sealed class RewriteException(RewriteFailure failure, int status = 0, str
     public string Describe() => Failure switch
     {
         RewriteFailure.MissingKey => L.NeedKey,
+        RewriteFailure.MissingModel => L.NeedModel,
         RewriteFailure.BadEndpoint => L.BadEndpoint,
         RewriteFailure.TooLong => L.TooLong,
         RewriteFailure.NoChange => L.NoChange,
@@ -70,7 +71,7 @@ public sealed class RewriteException(RewriteFailure failure, int status = 0, str
     public static bool IsBusy(int status) => status is 429 or >= 500;
 
     /// <summary>Key, model or endpoint problems are fixed in Settings.</summary>
-    public bool FixableInSettings => Failure is RewriteFailure.MissingKey or RewriteFailure.BadEndpoint
+    public bool FixableInSettings => Failure is RewriteFailure.MissingKey or RewriteFailure.MissingModel or RewriteFailure.BadEndpoint
         || (Failure == RewriteFailure.Http && Status is 400 or 401 or 403 or 404);
 }
 
@@ -114,6 +115,7 @@ public sealed class AIClient
     public async Task<string> RewriteAsync(string text, RewriteMode mode, CancellationToken cancel)
     {
         if (ApiKey.Length == 0) throw new RewriteException(RewriteFailure.MissingKey);
+        if (Model.Length == 0) throw new RewriteException(RewriteFailure.MissingModel);
         if (baseUrl == null) throw new RewriteException(RewriteFailure.BadEndpoint);
         if (text.Length > MaxSourceCharacters) throw new RewriteException(RewriteFailure.TooLong);
         try

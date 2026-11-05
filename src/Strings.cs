@@ -81,13 +81,14 @@ public static class L
 
     // Errors
     public static string NeedKey => T("请先在设置里填写 API Key。", "Add your API key in Settings first.");
+    public static string NeedModel => T("请先在设置里填写模型。", "Enter a model in Settings first.");
     public static string BadEndpoint => T("API 地址无效，请在设置里填写以 https:// 开头的地址。", "The API address is invalid. Enter one starting with https:// in Settings.");
     public static string NoSelection => T("请先选中要处理的文字。", "Select some text first.");
     public static string TooLong => T("文字太长，请分段处理（最多 5000 字）。", "The text is too long; do it in parts (5,000 characters max).");
     public static string NoChange => T("没有需要修改的地方。", "Nothing to change.");
     public static string KeyRejected => T("API Key 无效或没有权限，请在设置里检查。", "The API key was rejected. Check it in Settings.");
-    public static string RegionUnsupported => T("Gemini 在你所在的地区不可用。请在设置里改用 OpenAI 兼容（DeepSeek），或通过代理网络使用 Gemini。",
-        "Gemini isn't available in your region. Switch to OpenAI compatible (DeepSeek) in Settings, or reach Gemini through a proxy.");
+    public static string RegionUnsupported => T("Gemini 在你所在的地区不可用。请在设置里改用 DeepSeek，或通过代理网络使用 Gemini。",
+        "Gemini isn't available in your region. Switch to DeepSeek in Settings, or reach Gemini through a proxy.");
     public static string ProviderBusy(int code) => T($"AI 服务商暂时繁忙（{code}），自动重试后仍未成功。请稍后再试，或在设置里换用其他服务商。",
         $"The AI provider is busy right now ({code}) and still didn't answer after a few tries. Try again shortly, or switch providers in Settings.");
     public static string RequestRejected(int code, string? reason) => reason == null
@@ -115,11 +116,8 @@ public static class L
     public static string GeminiNote => T("只提供速度快、费用低的 Flash-Lite 模型。润色或翻译时，选中的文字会发给 Google Gemini。",
         "Only the fast, low-cost Flash-Lite models. When you polish or translate, the selected text is sent to Google Gemini.");
     public static string ProviderNote => T("润色、翻译用哪家 AI 服务", "Which AI service polishes and translates");
-    public static string ApiPresetNote => T("DeepSeek 已内置；选「自定义」可接其他兼容服务", "DeepSeek is built in; choose Custom for another compatible service");
     public static string ApiBaseUrlNote => T("以 https:// 开头", "Starts with https://");
     public static string ModelNote => T("润色和翻译使用的模型", "The model that polishes and translates");
-    public static string ApiPreset => T("服务地址", "Endpoint");
-    public static string CustomPreset => T("自定义", "Custom");
     public static string DeepSeekNote => T("地址已内置，填好 API Key 就能用，国内可直连。润色或翻译时，选中的文字会发给 DeepSeek。",
         "The address is built in, so a key is all you need; fast in mainland China. When you polish or translate, the selected text is sent to DeepSeek.");
     public static string OpenAINote => T("可接 OpenAI、OpenRouter 等兼容服务，填写对方的 API 地址和模型。润色或翻译时，选中的文字会发给该服务。",
