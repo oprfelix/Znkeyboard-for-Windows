@@ -144,14 +144,15 @@ public sealed class Settings
     }
 
     /// <summary>
-    /// One-time move of the DeepSeek preset to its own provider, key and model included. The old
-    /// key is removed only once the new one reads back, so a failed write retries next launch.
+    /// One-time move of the DeepSeek preset to its own provider, key and model included. DeepSeek's
+    /// address counts too, typed before presets or under Custom, and so does no address with no
+    /// preset. The old key is removed only once the new one reads back, so a failed write retries.
     /// </summary>
     private void SplitDeepSeekPreset()
     {
         if (DeepSeekPresetSplit) return;
-        var onDeepSeek = Preset == ApiPreset.DeepSeek
-            || (Preset == null && (string.IsNullOrWhiteSpace(OpenAIBaseUrl) || OpenAIBaseUrl.Contains("api.deepseek.com")));
+        var onDeepSeek = Preset == ApiPreset.DeepSeek || OpenAIBaseUrl.Contains("api.deepseek.com")
+            || (Preset == null && string.IsNullOrWhiteSpace(OpenAIBaseUrl));
         if (onDeepSeek)
         {
             var key = Credentials.Read(Provider.OpenAICompatible);
