@@ -18,8 +18,8 @@ public static class L
     public static string Polish => T("润色", "Polish");
     public static string PolishSelection => T("润色选中文字", "Polish Selection");
     public static string ReadSelection => T("划词翻译", "Translate Selection");
-    public static string TranslateTo(TranslateLanguage language) => T($"AI 翻译成{language.DisplayName}", $"Translate to {language.DisplayName}");
-    public static string TranslateMenu => T("AI 翻译的语言", "Translation Language");
+    public static string TranslateTo(TranslateLanguage language) => T($"AI 翻译为{language.DisplayName}", $"Translate to {language.DisplayName}");
+    public static string TranslateMenu => T("AI 翻译语言", "Translation Language");
     public static string TranslateShort => T("AI 翻译为", "Translate to");
     public static string SettingsMenu => T("设置…", "Settings…");
     public static string Quit => T("退出 ZnKeyboard", "Quit ZnKeyboard");
@@ -27,8 +27,8 @@ public static class L
     public static string ScreenshotTranslate => T("截图翻译", "Screenshot Translate");
     public static string CheckForUpdates => T("检查更新…", "Check for Updates…");
     public static string About => T("关于 ZnKeyboard", "About ZnKeyboard");
-    public static string AboutText(string version) => T($"ZnKeyboard for Windows {version}\n选中文字一键润色、翻译，截图翻译。\n\n官网：znkeyboard.2amz.com\n镜像：oprfelix.github.io/znkeyboard\nGPL-3.0 开源",
-        $"ZnKeyboard for Windows {version}\nPolish or translate selected text, and translate screenshots.\n\nWebsite: znkeyboard.2amz.com\nMirror: oprfelix.github.io/znkeyboard\nOpen source under GPL-3.0");
+    public static string AboutText(string version) => T($"ZnKeyboard for Windows {version}\n选中文字一键润色、翻译，截图翻译。\n\n官网：zn.2amz.com\n镜像：oprfelix.github.io/znkeyboard\nGPL-3.0 开源",
+        $"ZnKeyboard for Windows {version}\nPolish or translate selected text, and translate screenshots.\n\nWebsite: zn.2amz.com\nMirror: oprfelix.github.io/znkeyboard\nOpen source under GPL-3.0");
     public static string UpdateAvailable(string version) => T($"有新版本 {version}", $"ZnKeyboard {version} is available");
     public static string UpdateAvailableNote(string current) => T($"你正在使用 {current}。点「立即更新」会自动下载并替换，完成后重新启动 ZnKeyboard，设置和 API Key 都会保留。",
         $"You have {current}. Update Now downloads and installs it, then restarts ZnKeyboard; your settings and API key stay.");
@@ -133,19 +133,19 @@ public static class L
     public static string ReadShort => T("翻译为", "Translate to");
     public static string PinCard => T("固定，点别处时不关闭", "Pin to keep it open");
     public static string UnpinCard => T("取消固定", "Unpin");
-    public static string TranslateTarget => T("AI 翻译成", "Translate to");
+    public static string TranslateTarget => T("AI 翻译为", "Translate to");
     public static string TranslateTargetNote => T("用于输入框里的「AI 翻译」", "For Translate in text boxes");
-    public static string ScreenshotTarget => T("划词和截图翻译成", "Reading and screenshots to");
+    public static string ScreenshotTarget => T("划词和截图翻译为", "Selection and screenshots to");
     public static string ScreenshotTargetNote => T("原文是中文时翻成英文；图片只在本机识别，不会上传",
         "Chinese text goes to English. Images are read on this PC and never uploaded");
     public static string ShortcutsSection => T("快捷键", "Shortcuts");
     public static string PolishShortcut => T("润色", "Polish");
     public static string PolishShortcutNote => T("润色选中的文字", "Polish the selected text");
     public static string TranslateShortcut => T("AI 翻译", "Translate");
-    public static string TranslateShortcutNote => T("把选中的文字翻译成「AI 翻译成」的语言", "Translate the selected text");
+    public static string TranslateShortcutNote => T("把选中的文字翻译成「AI 翻译为」选的语言", "Translate the selected text");
     public static string ScreenshotShortcut => T("截图翻译", "Screenshot translate");
     public static string ReadShortcut => T("划词翻译", "Translate selection");
-    public static string ReadShortcutNote => T("把选中的文字翻译成「划词和截图翻译成」的语言，网页、文档里都能用", "Translate the selected text to read, on web pages and documents too");
+    public static string ReadShortcutNote => T("把选中的文字翻译成「划词和截图翻译为」选的语言，网页、文档里都能用", "Translate the selected text to read, on web pages and documents too");
     public static string ScreenshotShortcutNote => T("按下后框选屏幕上要翻译的区域", "Then drag over the part of the screen to translate");
     public static string ShortcutsNote => T("没有按钮的程序里也能用快捷键。点一下快捷键，再按新的组合键即可修改；Esc 取消。",
         "Shortcuts work even where no buttons appear. Click one, then press the new keys; Esc cancels.");
