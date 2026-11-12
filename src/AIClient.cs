@@ -231,7 +231,7 @@ public sealed class AIClient
         catch (JsonException) { throw new RewriteException(RewriteFailure.BadResponse); }
     }
 
-    /// <summary>Models this key can use: Flash-Lite only for Gemini, everything the server lists otherwise.</summary>
+    /// <summary>The models the server lists; also how a key is checked. Only a custom server's list is offered.</summary>
     /// <remarks>Loading the list is also the settings window's key check: <see cref="ModelList.Status"/> is 0 when the server could not be reached.</remarks>
     public async Task<ModelList> ListModelsAsync(CancellationToken cancel)
     {
@@ -245,7 +245,7 @@ public sealed class AIClient
             var status = (int)response.StatusCode;
             if (!response.IsSuccessStatusCode) return new([], status, RewriteException.ProviderMessage(text));
             var ids = JsonNode.Parse(text)?["data"]?.AsArray().Select(m => (string?)m?["id"]).OfType<string>().ToArray() ?? [];
-            return new(Provider == Provider.Gemini ? GeminiModels.LiteModels(ids) : ids.Distinct().OrderBy(id => id).ToArray(), status, null);
+            return new(ids.Select(id => id.Replace("models/", "")).Distinct().OrderBy(id => id).ToArray(), status, null);
         }
         catch (HttpRequestException) { return new([], 0, null); }
         catch (TaskCanceledException) when (!cancel.IsCancellationRequested) { return new([], 0, null); }

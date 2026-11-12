@@ -26,7 +26,6 @@ namespace ZnKeyboard;
 /// </summary>
 public sealed class SelectionPill : IDisposable
 {
-    public Action OnPolish { get; set; } = () => { };
     public Action OnTranslate { get; set; } = () => { };
     /// <summary>Translate text selected while reading (the reading pill).</summary>
     public Action OnRead { get; set; } = () => { };
@@ -36,8 +35,7 @@ public sealed class SelectionPill : IDisposable
     private readonly Window window;
     private readonly TextBlock chipText = new() { FontSize = 11, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
     private readonly Button chip;
-    private readonly Button polishButton, translateButton;
-    private readonly Border divider;
+    private readonly Button translateButton;
     /// <summary>Showing for read-only text: translate only, into the reading language.</summary>
     private bool reading;
     private readonly Native.HookProc mouseProc, keyboardProc; // Kept alive: the hooks call them.
@@ -76,14 +74,11 @@ public sealed class SelectionPill : IDisposable
             ToolTip = L.TranslateMenu,
         };
         chip.Click += (_, _) => ChooseLanguage();
-        var polish = polishButton = Flat(L.Polish, SymbolRegular.Sparkle16, () => { Hide(); OnPolish(); });
         var translate = translateButton = Flat(L.TranslateShort, SymbolRegular.Translate16, () =>
         {
             Hide();
             if (reading) OnRead(); else OnTranslate();
         });
-        divider = new Border { Width = 1, Height = 16, Margin = new Thickness(2, 0, 2, 0) };
-        divider.SetResourceReference(Border.BackgroundProperty, "DividerStrokeColorDefaultBrush");
         var face = new Border
         {
             BorderThickness = new Thickness(1),
@@ -94,7 +89,7 @@ public sealed class SelectionPill : IDisposable
             Child = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
-                Children = { polish, divider, translate, chip },
+                Children = { translate, chip },
             },
         };
         face.SetResourceReference(Border.BackgroundProperty, "SolidBackgroundFillColorBaseBrush");
@@ -253,7 +248,7 @@ public sealed class SelectionPill : IDisposable
     {
         var settings = Settings.Current;
         // Reading selections are mouse-only: Ctrl+A on a page selects the whole page.
-        var lookForReading = settings.ReadingPill && pointer != null;
+        var lookForReading = settings.ReadingPillShown && pointer != null;
         if ((!settings.SelectionPill && !lookForReading) || IsSuspended())
         {
             DebugLog.Note("  skipped: " + (IsSuspended() ? "result card open" : "turned off in settings"));
@@ -285,15 +280,13 @@ public sealed class SelectionPill : IDisposable
 
         sourceWindow = foreground;
         reading = readingText;
-        polishButton.Visibility = divider.Visibility = reading ? Visibility.Collapsed : Visibility.Visible;
         translateButton.Content = reading ? L.ReadShort : L.TranslateShort;
         var target = reading ? settings.ReadTarget : settings.Target;
         chipText.Text = target.Code;
         chip.ToolTip = reading ? L.ScreenshotTarget : L.TranslateMenu;
-        polishButton.ToolTip = $"{L.Polish}  {settings.ShortcutFor(ShortcutAction.Polish).Display}";
-        translateButton.ToolTip = reading
-            ? $"{L.ReadShort} {target.DisplayName}  {settings.ShortcutFor(ShortcutAction.Read).Display}"
-            : $"{L.TranslateShort} {target.DisplayName}  {settings.ShortcutFor(ShortcutAction.Translate).Display}";
+        // One shortcut for both, as on the Mac.
+        var shortcut = settings.ShortcutFor(ShortcutAction.Translate).Display;
+        translateButton.ToolTip = $"{(reading ? L.ReadShort : L.TranslateShort)} {target.DisplayName}  {shortcut}";
         var scale = Native.ScaleAt(anchor);
         // Roughly in place first, so it opens on the right monitor; Place keeps it on screen once its size is known.
         window.Left = anchor.X / scale - 4;

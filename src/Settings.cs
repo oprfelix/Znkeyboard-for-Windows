@@ -4,7 +4,6 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Text.RegularExpressions;
 using Microsoft.Win32;
 
 namespace ZnKeyboard;
@@ -15,8 +14,11 @@ public enum Provider { Gemini, OpenAICompatible, DeepSeek }
 /// <summary>Through 0.7.4 DeepSeek was a preset of the OpenAI-compatible provider; only the upgrade reads this.</summary>
 public enum ApiPreset { DeepSeek, Custom }
 
-/// <summary>New actions go last: each one's hot key id is its number.</summary>
-public enum ShortcutAction { Polish, Translate, Screenshot, Read }
+/// <summary>
+/// Each action's hot key id is its number plus one. Polish (0) and the reading shortcut (3) are gone,
+/// as on the Mac: AI 翻译 reads or translates by what has focus.
+/// </summary>
+public enum ShortcutAction { Translate = 1, Screenshot = 2 }
 
 /// <summary>A global shortcut: Win32 MOD_* flags, a virtual-key code, and the key's name ("R", "F5").</summary>
 public sealed record Shortcut(int Modifiers, int Key, string KeyName)
@@ -38,13 +40,11 @@ public sealed record Shortcut(int Modifiers, int Key, string KeyName)
 
     public bool Collides(Shortcut other) => Modifiers == other.Modifiers && Key == other.Key;
 
-    /// <summary>Ctrl+Shift+1 reading, 2 screenshot, E polish, R translate: the Mac's ⇧⌘ keys.</summary>
+    /// <summary>Ctrl+Shift+E AI 翻译 and Ctrl+Shift+2 screenshot: the Mac's ⇧⌘E and ⇧⌘2.</summary>
     public static Shortcut Default(ShortcutAction action) => action switch
     {
-        ShortcutAction.Read => new Shortcut(Control | Shift, 0x31, "1"),
         ShortcutAction.Screenshot => new Shortcut(Control | Shift, 0x32, "2"),
-        ShortcutAction.Polish => new Shortcut(Control | Shift, 0x45, "E"),
-        _ => new Shortcut(Control | Shift, 0x52, "R"),
+        _ => new Shortcut(Control | Shift, 0x45, "E"),
     };
 }
 
@@ -59,6 +59,17 @@ public sealed class Settings
     // Where the OpenAI-compatible provider's address starts before the user types their own.
     public const string DefaultOpenAIBaseUrl = "https://api.openai.com/v1";
     public const string DefaultDeepSeekModel = "deepseek-flash";
+
+    /// <summary>
+    /// The models offered, as on iOS and Android: one fast, low-cost model for DeepSeek and the
+    /// Flash-Lite ones for Google, first the default. Empty for a custom server: its own list.
+    /// </summary>
+    public static string[] ModelsFor(Provider provider) => provider switch
+    {
+        Provider.DeepSeek => [DefaultDeepSeekModel],
+        Provider.Gemini => [DefaultGeminiModel, "gemini-3.1-flash-lite"],
+        _ => [],
+    };
     /// <summary>The providers in the order the settings menu lists them.</summary>
     public static readonly Provider[] ProviderMenu = [Provider.DeepSeek, Provider.Gemini, Provider.OpenAICompatible];
 
@@ -79,17 +90,20 @@ public sealed class Settings
     public string ScreenshotTarget { get; set; } = "ZH";
     /// <summary>"system", "zh" or "en".</summary>
     public string UiLanguage { get; set; } = "system";
-    /// <summary>The 润色 | AI 翻译为 pill on text selected in a text box. On by default.</summary>
+    /// <summary>The AI 翻译为 pill on text selected in a text box. On by default.</summary>
     public bool SelectionPill { get; set; } = true;
-    /// <summary>The 翻译为 pill on text selected while reading (web pages, documents). Off by default.</summary>
-    public bool ReadingPill { get; set; }
+    /// <summary>
+    /// The 翻译为 pill on text selected while reading (web pages, documents). On by default since
+    /// 0.8, as on the Mac; a new name, as the old ReadingPill was saved off for everyone.
+    /// </summary>
+    public bool ReadingPillShown { get; set; } = true;
     /// <summary>Translation cards (reading, screenshot) stay open on clicks elsewhere. Remembered.</summary>
     public bool PinTranslationCard { get; set; }
     /// <summary>The anonymous daily ping behind the numbers on znkeyboard.2amz.com. On by default.</summary>
     public bool AnonymousStats { get; set; } = true;
     /// <summary>A random id made on this PC for the ping, tied to nothing else.</summary>
     public string? InstallId { get; set; }
-    /// <summary>Polish and translate runs not yet reported.</summary>
+    /// <summary>Translations not yet reported.</summary>
     public int PendingUses { get; set; }
     public DateTime LastPing { get; set; }
     /// <summary>A daily look for a new release. On by default.</summary>
@@ -97,10 +111,9 @@ public sealed class Settings
     public DateTime LastUpdateCheck { get; set; }
     /// <summary>The newest version already announced, so each is announced once.</summary>
     public string? NotifiedUpdate { get; set; }
-    public Shortcut? PolishShortcut { get; set; }
+    /// <summary>Only a shortcut the user set; the default (now Ctrl+Shift+E) otherwise.</summary>
     public Shortcut? TranslateShortcut { get; set; }
     public Shortcut? ScreenshotShortcut { get; set; }
-    public Shortcut? ReadShortcut { get; set; }
 
     // Static fields initialise in the order they are written, so the paths must come before Current:
     // until 0.6.0 Load() ran while FilePath was still null, never read the file, and the next Save()
@@ -218,11 +231,11 @@ public sealed class Settings
 
     public TranslateLanguage Target => Languages.ByCode(TranslateTarget);
 
-    /// <summary>The model for <paramref name="provider"/>. Gemini falls back to the default unless a Lite model is saved.</summary>
+    /// <summary>The model for <paramref name="provider"/>. DeepSeek and Google fall back to their default unless a listed model is saved.</summary>
     public string ModelFor(Provider provider) => provider switch
     {
-        Provider.Gemini => GeminiModels.IsLite(GeminiModel) ? GeminiModel : DefaultGeminiModel,
-        Provider.DeepSeek => string.IsNullOrWhiteSpace(DeepSeekModel) ? DefaultDeepSeekModel : DeepSeekModel.Trim(),
+        Provider.Gemini => Array.IndexOf(ModelsFor(provider), GeminiModel?.Trim()) >= 0 ? GeminiModel!.Trim() : DefaultGeminiModel,
+        Provider.DeepSeek => Array.IndexOf(ModelsFor(provider), DeepSeekModel?.Trim()) >= 0 ? DeepSeekModel!.Trim() : DefaultDeepSeekModel,
         _ => OpenAIModel.Trim(),
     };
 
@@ -236,23 +249,12 @@ public sealed class Settings
         }
     }
 
-    public Shortcut ShortcutFor(ShortcutAction action) => action switch
-    {
-        ShortcutAction.Polish => PolishShortcut,
-        ShortcutAction.Translate => TranslateShortcut,
-        ShortcutAction.Screenshot => ScreenshotShortcut,
-        _ => ReadShortcut,
-    } ?? Shortcut.Default(action);
+    public Shortcut ShortcutFor(ShortcutAction action) =>
+        (action == ShortcutAction.Screenshot ? ScreenshotShortcut : TranslateShortcut) ?? Shortcut.Default(action);
 
     public void SetShortcut(ShortcutAction action, Shortcut shortcut)
     {
-        switch (action)
-        {
-            case ShortcutAction.Polish: PolishShortcut = shortcut; break;
-            case ShortcutAction.Translate: TranslateShortcut = shortcut; break;
-            case ShortcutAction.Screenshot: ScreenshotShortcut = shortcut; break;
-            default: ReadShortcut = shortcut; break;
-        }
+        if (action == ShortcutAction.Screenshot) ScreenshotShortcut = shortcut; else TranslateShortcut = shortcut;
         Save();
     }
 
@@ -300,41 +302,6 @@ public sealed class Settings
     }
 
     private static string StartupCommand(string exe) => $"\"{exe}\" {Installer.StartupArg}";
-}
-
-/// <summary>Gemini is limited to Flash-Lite 2.5 and newer, as on Android and macOS.</summary>
-public static class GeminiModels
-{
-    private static readonly Regex Lite = new(@"^gemini-(\d+(?:\.\d+)?)-flash-lite(?:-[a-z0-9-]+)?$", RegexOptions.Compiled);
-
-    public static bool IsLite(string? id)
-    {
-        var match = Lite.Match((id ?? "").Trim().ToLowerInvariant());
-        return match.Success && double.TryParse(match.Groups[1].Value, System.Globalization.NumberStyles.Float,
-            System.Globalization.CultureInfo.InvariantCulture, out var version) && version >= 2.5;
-    }
-
-    /// <summary>Lite models from a /models listing, newest first, without previews whose stable release is listed.</summary>
-    public static string[] LiteModels(string[] ids)
-    {
-        var lite = new System.Collections.Generic.HashSet<string>();
-        foreach (var id in ids)
-        {
-            var clean = id.Replace("models/", "");
-            if (IsLite(clean)) lite.Add(clean);
-        }
-        var result = new System.Collections.Generic.List<string>();
-        foreach (var id in lite)
-            if (!(id.EndsWith("-preview") && lite.Contains(id[..^"-preview".Length]))) result.Add(id);
-        result.Sort((a, b) => Version(b).CompareTo(Version(a)) is var c && c != 0 ? c : string.CompareOrdinal(a, b));
-        return result.ToArray();
-    }
-
-    private static double Version(string id)
-    {
-        var part = id["gemini-".Length..].Split('-')[0];
-        return double.TryParse(part, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : 0;
-    }
 }
 
 /// <summary>API keys in Windows Credential Manager (encrypted for the signed-in user).</summary>

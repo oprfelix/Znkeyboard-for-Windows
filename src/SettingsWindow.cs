@@ -121,7 +121,7 @@ public sealed class SettingsWindow : FluentWindow
             settings.OpenAIBaseUrl = baseUrlBox.Text.Trim();
             settings.Save();
         }
-        // Only Gemini's model is picked from a list; the others are typed.
+        // DeepSeek's and Google's models are picked from a fixed list; a custom server's is typed.
         if (modelBox is { IsEditable: true } box && box.Text.Trim() != settings.ModelFor(settings.Provider)) SaveModel(box.Text);
     }
 
@@ -132,7 +132,7 @@ public sealed class SettingsWindow : FluentWindow
         var settings = Settings.Current;
         PageTitle(L.AiSection);
 
-        var provider = Combo(new[] { "DeepSeek", "Google Gemini", L.OpenAICompatible }, Array.IndexOf(Settings.ProviderMenu, settings.Provider));
+        var provider = Combo(new[] { "DeepSeek", "Google", L.OpenAICompatible }, Array.IndexOf(Settings.ProviderMenu, settings.Provider));
         provider.SelectionChanged += (_, _) =>
         {
             SaveFields();
@@ -168,7 +168,7 @@ public sealed class SettingsWindow : FluentWindow
         key.LostFocus += (_, _) => SaveKey();
         page.Children.Add(Card(SymbolRegular.ShieldLock24, L.ApiKey, L.KeyStoredNote, new StackPanel { Children = { key, keyStatus } }));
 
-        var model = new ComboBox { IsEditable = settings.Provider != Provider.Gemini, Width = 320 };
+        var model = new ComboBox { IsEditable = settings.Provider == Provider.OpenAICompatible, Width = 320 };
         modelBox = model;
         FillModels(Array.Empty<string>());
         model.SelectionChanged += (_, _) => { if (model.SelectedItem is string id) SaveModel(id); };
@@ -206,18 +206,16 @@ public sealed class SettingsWindow : FluentWindow
         pill.Click += (_, _) => { settings.SelectionPill = pill.IsChecked == true; settings.Save(); };
         page.Children.Add(Card(SymbolRegular.DesktopCursor24, L.SelectionPill, L.SelectionPillNote, pill));
 
-        var readingPill = new ToggleSwitch { IsChecked = settings.ReadingPill };
-        readingPill.Click += (_, _) => { settings.ReadingPill = readingPill.IsChecked == true; settings.Save(); };
+        var readingPill = new ToggleSwitch { IsChecked = settings.ReadingPillShown };
+        readingPill.Click += (_, _) => { settings.ReadingPillShown = readingPill.IsChecked == true; settings.Save(); };
         page.Children.Add(Card(SymbolRegular.DocumentText24, L.ReadingPill, L.ReadingPillNote, readingPill));
     }
 
     private void BuildShortcuts()
     {
         PageTitle(L.ShortcutsSection);
-        page.Children.Add(Card(SymbolRegular.DocumentText24, L.ReadShortcut, L.ReadShortcutNote, Recorder(ShortcutAction.Read)));
-        page.Children.Add(Card(SymbolRegular.ScanText24, L.ScreenshotShortcut, L.ScreenshotShortcutNote, Recorder(ShortcutAction.Screenshot)));
-        page.Children.Add(Card(SymbolRegular.Sparkle24, L.PolishShortcut, L.PolishShortcutNote, Recorder(ShortcutAction.Polish)));
         page.Children.Add(Card(SymbolRegular.Translate24, L.TranslateShortcut, L.TranslateShortcutNote, Recorder(ShortcutAction.Translate)));
+        page.Children.Add(Card(SymbolRegular.ScanText24, L.ScreenshotShortcut, L.ScreenshotShortcutNote, Recorder(ShortcutAction.Screenshot)));
         Footnote(L.ShortcutsNote);
     }
 
@@ -276,14 +274,17 @@ public sealed class SettingsWindow : FluentWindow
         settings.Save();
     }
 
-    /// <summary>The live list once loaded; until then the saved model (and the recommended one for Gemini).</summary>
+    /// <summary>
+    /// DeepSeek's and Google's fixed list, as on iOS and Android; for a custom server its live list
+    /// once loaded, until then the saved model.
+    /// </summary>
     private void FillModels(string[] loaded)
     {
         if (modelBox == null) return;
         var settings = Settings.Current;
         var current = settings.ModelFor(settings.Provider);
-        var options = loaded.ToList();
-        if (settings.Provider == Provider.Gemini && !options.Contains(Settings.DefaultGeminiModel)) options.Insert(0, Settings.DefaultGeminiModel);
+        var fixedModels = Settings.ModelsFor(settings.Provider);
+        var options = (fixedModels.Length > 0 ? fixedModels : loaded).ToList();
         if (current.Length > 0 && !options.Contains(current)) options.Add(current);
         modelBox.ItemsSource = options;
         modelBox.SelectedItem = current;

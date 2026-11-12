@@ -29,7 +29,19 @@ public sealed class Controller
         panel.OnRetry = () => { if (last is { } l) Process(l.text, l.mode, l.client); };
     }
 
-    /// <summary>Polish or translate the selection, or (<see cref="RewriteMode.IsRead"/>) translate text selected while reading.</summary>
+    /// <summary>
+    /// The AI 翻译 shortcut, as on the Mac: text selected in a text box is translated to replace it;
+    /// text selected while reading (a web page, a document) gets a translation to read instead.
+    /// </summary>
+    public async void RunTranslate()
+    {
+        var state = await Task.Run(() => TextBridge.InspectFocusedSelection([], reading: true).state);
+        Run(state == TextBridge.SelectionState.Reading
+            ? RewriteMode.Read(Settings.Current.ReadTarget)
+            : RewriteMode.Translate(Settings.Current.Target));
+    }
+
+    /// <summary>Translate the selection, or (<see cref="RewriteMode.IsRead"/>) translate text selected while reading.</summary>
     public async void Run(RewriteMode mode)
     {
         running?.Cancel();

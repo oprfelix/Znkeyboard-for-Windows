@@ -16,8 +16,6 @@ public static class L
 
     // Tray menu
     public static string Polish => T("润色", "Polish");
-    public static string PolishSelection => T("润色选中文字", "Polish Selection");
-    public static string ReadSelection => T("划词翻译", "Translate Selection");
     public static string TranslateTo(TranslateLanguage language) => T($"AI 翻译为{language.DisplayName}", $"Translate to {language.DisplayName}");
     public static string TranslateMenu => T("AI 翻译语言", "Translation Language");
     public static string TranslateShort => T("AI 翻译为", "Translate to");
@@ -27,8 +25,8 @@ public static class L
     public static string ScreenshotTranslate => T("截图翻译", "Screenshot Translate");
     public static string CheckForUpdates => T("检查更新…", "Check for Updates…");
     public static string About => T("关于 ZnKeyboard", "About ZnKeyboard");
-    public static string AboutText(string version) => T($"ZnKeyboard for Windows {version}\n选中文字一键润色、翻译，截图翻译。\n\n官网：zn.2amz.com\n镜像：oprfelix.github.io/znkeyboard\nGPL-3.0 开源",
-        $"ZnKeyboard for Windows {version}\nPolish or translate selected text, and translate screenshots.\n\nWebsite: zn.2amz.com\nMirror: oprfelix.github.io/znkeyboard\nOpen source under GPL-3.0");
+    public static string AboutText(string version) => T($"ZnKeyboard for Windows {version}\n选中文字一键翻译，截图翻译。\n\n官网：zn.2amz.com\n镜像：oprfelix.github.io/znkeyboard\nGPL-3.0 开源",
+        $"ZnKeyboard for Windows {version}\nTranslate selected text and screenshots.\n\nWebsite: zn.2amz.com\nMirror: oprfelix.github.io/znkeyboard\nOpen source under GPL-3.0");
     public static string UpdateAvailable(string version) => T($"有新版本 {version}", $"ZnKeyboard {version} is available");
     public static string UpdateAvailableNote(string current) => T($"你正在使用 {current}。点「立即更新」会自动下载并替换，完成后重新启动 ZnKeyboard，设置和 API Key 都会保留。",
         $"You have {current}. Update Now downloads and installs it, then restarts ZnKeyboard; your settings and API key stay.");
@@ -55,7 +53,7 @@ public static class L
     public static string UpdatedTitle(string version) => T($"已更新到 {version}", $"Updated to {version}");
     public static string UpdatedNote => T("设置和 API Key 都已保留。下载的文件可以删除了。", "Your settings and API key were kept. You can delete the download.");
     public static string InstallFailed(string reason) => T($"无法安装到本机（{reason}），这次先从当前位置运行。", $"Couldn't install ZnKeyboard ({reason}). It will run from where it is this time.");
-    public static string ShortcutDescription => T("选中文字一键润色、翻译", "Polish or translate selected text");
+    public static string ShortcutDescription => T("选中文字一键翻译", "Translate selected text");
     public static string Uninstall => T("卸载", "Uninstall");
     public static string UninstallHeading => T("要卸载 ZnKeyboard 吗？", "Uninstall ZnKeyboard?");
     public static string UninstallText => T("会退出 ZnKeyboard，并移除程序、开始菜单快捷方式和开机启动。", "This quits ZnKeyboard and removes the app, its Start menu shortcut and Start with Windows.");
@@ -113,21 +111,21 @@ public static class L
     public static string KeyUnverified(string reason) => T($"暂时无法验证 API Key：{reason}", $"Couldn't check the API key: {reason}");
     public static string Model => T("模型", "Model");
     public static string Recommended => T("推荐", "recommended");
-    public static string GeminiNote => T("只提供速度快、费用低的 Flash-Lite 模型。润色或翻译时，选中的文字会发给 Google Gemini。",
-        "Only the fast, low-cost Flash-Lite models. When you polish or translate, the selected text is sent to Google Gemini.");
-    public static string ProviderNote => T("润色、翻译用哪家 AI 服务", "Which AI service polishes and translates");
+    public static string GeminiNote => T("只提供速度快、费用低的 Flash-Lite 模型。翻译时，选中的文字会发给 Google Gemini。",
+        "Only the fast, low-cost Flash-Lite models. When you translate, the selected text is sent to Google Gemini.");
+    public static string ProviderNote => T("翻译用哪家 AI 服务", "Which AI service translates");
     public static string ApiBaseUrlNote => T("以 https:// 开头", "Starts with https://");
-    public static string ModelNote => T("润色和翻译使用的模型", "The model that polishes and translates");
-    public static string DeepSeekNote => T("地址已内置，填好 API Key 就能用，国内可直连。润色或翻译时，选中的文字会发给 DeepSeek。",
-        "The address is built in, so a key is all you need; fast in mainland China. When you polish or translate, the selected text is sent to DeepSeek.");
-    public static string OpenAINote => T("可接 OpenAI、OpenRouter 等兼容服务，填写对方的 API 地址和模型。润色或翻译时，选中的文字会发给该服务。",
-        "Works with OpenAI, OpenRouter and other compatible services: enter their API address and model. When you polish or translate, the selected text is sent to that service.");
+    public static string ModelNote => T("翻译使用的模型", "The model that translates");
+    public static string DeepSeekNote => T("地址已内置，填好 API Key 就能用，国内可直连。翻译时，选中的文字会发给 DeepSeek。",
+        "The address is built in, so a key is all you need; fast in mainland China. When you translate, the selected text is sent to DeepSeek.");
+    public static string OpenAINote => T("可接 OpenAI、OpenRouter 等兼容服务，填写对方的 API 地址和模型。翻译时，选中的文字会发给该服务。",
+        "Works with OpenAI, OpenRouter and other compatible services: enter their API address and model. When you translate, the selected text is sent to that service.");
 
     public static string UsageSection => T("使用", "Usage");
     public static string LanguagesGroup => T("翻译语言", "Languages");
     public static string ButtonsGroup => T("选中文字时显示按钮", "Show buttons on selected text");
     public static string SelectionPill => T("输入框", "In text boxes");
-    public static string SelectionPillNote => T("润色、AI 翻译", "Polish and Translate");
+    public static string SelectionPillNote => T("AI 翻译", "Translate");
     public static string ReadingPill => T("网页和文档", "On web pages and documents");
     public static string ReadingPillNote => T("划词翻译", "Translate what you read");
     public static string ReadShort => T("翻译为", "Translate to");
@@ -139,13 +137,9 @@ public static class L
     public static string ScreenshotTargetNote => T("原文是中文时翻成英文；图片只在本机识别，不会上传",
         "Chinese text goes to English. Images are read on this PC and never uploaded");
     public static string ShortcutsSection => T("快捷键", "Shortcuts");
-    public static string PolishShortcut => T("润色", "Polish");
-    public static string PolishShortcutNote => T("润色选中的文字", "Polish the selected text");
     public static string TranslateShortcut => T("AI 翻译", "Translate");
-    public static string TranslateShortcutNote => T("把选中的文字翻译成「AI 翻译为」选的语言", "Translate the selected text");
+    public static string TranslateShortcutNote => T("输入框里的文字直接翻译替换；网页和文档里的文字弹出译文", "In a text box, translated in place; on a web page or in a document, a translation to read");
     public static string ScreenshotShortcut => T("截图翻译", "Screenshot translate");
-    public static string ReadShortcut => T("划词翻译", "Translate selection");
-    public static string ReadShortcutNote => T("把选中的文字翻译成「划词和截图翻译为」选的语言，网页、文档里都能用", "Translate the selected text to read, on web pages and documents too");
     public static string ScreenshotShortcutNote => T("按下后框选屏幕上要翻译的区域", "Then drag over the part of the screen to translate");
     public static string ShortcutsNote => T("没有按钮的程序里也能用快捷键。点一下快捷键，再按新的组合键即可修改；Esc 取消。",
         "Shortcuts work even where no buttons appear. Click one, then press the new keys; Esc cancels.");
