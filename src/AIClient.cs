@@ -12,12 +12,11 @@ using System.Threading.Tasks;
 namespace ZnKeyboard;
 
 /// <summary>
-/// Polish only, polish and translate into <see cref="Target"/>, or (<see cref="IsRead"/>) a faithful
+/// Translate into <see cref="Target"/> to send (replacing the selection), or (<see cref="IsRead"/>) a faithful
 /// translation to read: of text selected while reading, or (<see cref="FromScreenshot"/>) of a screenshot.
 /// </summary>
 public sealed record RewriteMode(TranslateLanguage? Target, bool IsRead = false, bool FromScreenshot = false)
 {
-    public static readonly RewriteMode Polish = new((TranslateLanguage?)null);
     public static RewriteMode Translate(TranslateLanguage target) => new(target);
     public static RewriteMode Read(TranslateLanguage target, bool fromScreenshot = false) => new(target, true, fromScreenshot);
 }
@@ -72,7 +71,7 @@ public sealed class RewriteException(RewriteFailure failure, int status = 0, str
 
     /// <summary>Key, model or endpoint problems are fixed in Settings.</summary>
     public bool FixableInSettings => Failure is RewriteFailure.MissingKey or RewriteFailure.MissingModel or RewriteFailure.BadEndpoint
-        || (Failure == RewriteFailure.Http && Status is 400 or 401 or 403 or 404);
+        || (Failure == RewriteFailure.Http && Status is 400 or 401 or 403 or 404 or 422);
 }
 
 /// <summary>A /models answer: the models, the HTTP status (0: unreachable), and the provider's reason when it failed.</summary>
@@ -307,6 +306,6 @@ public static class Prompts
     private const string ReadFallback = "Translate the user's text faithfully into {language}, keeping its meaning, facts and line breaks. " +
         "Return a valid JSON object with exactly one field, `text`, containing only the translation.";
 
-    private const string Fallback = "Polish the user's text while preserving its meaning, tone, and language. " +
+    private const string Fallback = "Rewrite the user's text clearly while preserving its meaning and tone. " +
         "Return a valid JSON object with exactly one field, `text`, containing only the rewritten text.";
 }

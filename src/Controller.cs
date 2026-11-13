@@ -35,7 +35,9 @@ public sealed class Controller
     /// </summary>
     public async void RunTranslate()
     {
-        var state = await Task.Run(() => TextBridge.InspectFocusedSelection([], reading: true).state);
+        // An app that doesn't answer UI Automation in time is taken for a text box, as before the check.
+        var inspect = Task.Run(() => TextBridge.InspectFocusedSelection([], reading: true).state);
+        var state = await Task.WhenAny(inspect, Task.Delay(800)) == inspect ? inspect.Result : TextBridge.SelectionState.Failed;
         Run(state == TextBridge.SelectionState.Reading
             ? RewriteMode.Read(Settings.Current.ReadTarget)
             : RewriteMode.Translate(Settings.Current.Target));
@@ -48,6 +50,8 @@ public sealed class Controller
         var cancel = new CancellationTokenSource();
         running = cancel;
         last = null;
+        // A card left open (pinned, or not yet dismissed) would show the old result while this one is read.
+        panel.Close(clearResult: true);
 
         // The window whose text is selected; the paste must land there.
         var source = Native.GetForegroundWindow();

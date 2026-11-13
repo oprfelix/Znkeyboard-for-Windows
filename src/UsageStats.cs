@@ -6,7 +6,7 @@ namespace ZnKeyboard;
 
 /// <summary>
 /// The anonymous daily ping behind the numbers on znkeyboard.2amz.com: a random id made on this PC,
-/// the platform, the version and how many times text was polished or translated since the last
+/// the platform, the version and how many times text was translated since the last
 /// ping. Never any text, key or setting. Off when the user turns it off in Settings.
 /// </summary>
 public static class UsageStats
@@ -15,7 +15,7 @@ public static class UsageStats
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(10) };
     private static bool sending;
 
-    /// <summary>One finished polish, translation or reading translation.</summary>
+    /// <summary>One finished translation or reading translation.</summary>
     public static void RecordUse()
     {
         var settings = Settings.Current;

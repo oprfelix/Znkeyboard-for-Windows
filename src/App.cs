@@ -191,14 +191,21 @@ public sealed class App : Application
         }
         menu.Items.Add(Item(L.ScreenshotTranslate, '', () => RunFromMenu(ShortcutAction.Screenshot), settings.ShortcutFor(ShortcutAction.Screenshot)));
         menu.Items.Add(Item(L.TranslateTo(settings.Target), '', () => RunFromMenu(ShortcutAction.Translate), settings.ShortcutFor(ShortcutAction.Translate)));
+        // Two lists: what text boxes are translated into, and what reading and screenshots are.
         var languages = new Forms.ToolStripMenuItem(L.TranslateMenu);
-        foreach (var language in Languages.All)
+        foreach (var reading in new[] { false, true })
         {
-            languages.DropDownItems.Add(new Forms.ToolStripMenuItem(language.Label, null, (_, _) =>
+            if (reading) languages.DropDownItems.Add(new Forms.ToolStripSeparator());
+            languages.DropDownItems.Add(new Forms.ToolStripMenuItem(reading ? L.ScreenshotTarget : L.TranslateMenu) { Enabled = false });
+            var current = reading ? settings.ScreenshotTarget : settings.TranslateTarget;
+            foreach (var language in Languages.All)
             {
-                Settings.Current.TranslateTarget = language.Code;
-                Settings.Current.Save();
-            }) { Checked = language.Code == settings.TranslateTarget });
+                languages.DropDownItems.Add(new Forms.ToolStripMenuItem(language.Label, null, (_, _) =>
+                {
+                    if (reading) Settings.Current.ScreenshotTarget = language.Code; else Settings.Current.TranslateTarget = language.Code;
+                    Settings.Current.Save();
+                }) { Checked = language.Code == current });
+            }
         }
         menu.Items.Add(languages);
         menu.Items.Add(new Forms.ToolStripSeparator());

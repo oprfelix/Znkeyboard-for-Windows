@@ -112,6 +112,9 @@ internal static class Native
     [StructLayout(LayoutKind.Sequential)]
     public struct KBDLLHOOKSTRUCT { public uint VkCode, ScanCode, Flags, Time; public IntPtr ExtraInfo; }
 
+    /// <summary>KBDLLHOOKSTRUCT.Flags: the key came from SendInput or keybd_event (ours, reading or pasting), not the keyboard.</summary>
+    public const uint LLKHF_INJECTED = 0x10;
+
     /// <summary>The DPI scale of the monitor at <paramref name="point"/> (device pixels per DIP).</summary>
     public static double ScaleAt(POINT point)
     {

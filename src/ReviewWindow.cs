@@ -40,7 +40,7 @@ public sealed class ReviewWindow : Window
     private readonly StackPanel leftButtons = new() { Orientation = Orientation.Horizontal };
     private readonly StackPanel rightButtons = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
     private readonly Border card;
-    private RewriteMode mode = RewriteMode.Polish;
+    private RewriteMode mode = RewriteMode.Translate(Languages.ByCode("EN"));
     private string? result;
     private string? original;
     private readonly Button pin;
@@ -175,7 +175,10 @@ public sealed class ReviewWindow : Window
     {
         if (code >= 0 && !keysReleased && wParam.ToInt32() is Native.WM_KEYDOWN or Native.WM_SYSKEYDOWN)
         {
-            var vk = Marshal.PtrToStructure<Native.KBDLLHOOKSTRUCT>(lParam).VkCode;
+            var data = Marshal.PtrToStructure<Native.KBDLLHOOKSTRUCT>(lParam);
+            // Simulated keys are ZnKeyboard reading a new selection (Ctrl+C) or pasting: never the card's.
+            if ((data.Flags & Native.LLKHF_INJECTED) != 0) return Native.CallNextHookEx(keyboardHook, code, wParam, lParam);
+            var vk = data.VkCode;
             var hasResult = result != null;
             if (vk == 0x1B)
             {
@@ -224,8 +227,8 @@ public sealed class ReviewWindow : Window
         keysReleased = false;
         UpdatePin();
         var target = next.Target;
-        icon.Symbol = next.FromScreenshot ? SymbolRegular.ScanText24 : target == null ? SymbolRegular.Sparkle24 : SymbolRegular.Translate24;
-        title.Text = next.FromScreenshot ? L.ScreenshotTranslateTo : next.IsRead ? L.ReadShort : target == null ? L.Polish : L.TranslateShort;
+        icon.Symbol = next.FromScreenshot ? SymbolRegular.ScanText24 : SymbolRegular.Translate24;
+        title.Text = next.FromScreenshot ? L.ScreenshotTranslateTo : next.IsRead ? L.ReadShort : L.TranslateShort;
         updatingLanguage = true;
         language.Visibility = target == null ? Visibility.Collapsed : Visibility.Visible;
         language.ItemsSource = Languages.All.Select(l => l.Label).ToList();

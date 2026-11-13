@@ -15,7 +15,6 @@ public static class L
     private static string T(string zh, string en) => IsChinese ? zh : en;
 
     // Tray menu
-    public static string Polish => T("润色", "Polish");
     public static string TranslateTo(TranslateLanguage language) => T($"AI 翻译为{language.DisplayName}", $"Translate to {language.DisplayName}");
     public static string TranslateMenu => T("AI 翻译语言", "Translation Language");
     public static string TranslateShort => T("AI 翻译为", "Translate to");
@@ -37,6 +36,7 @@ public static class L
     public static string InstallingUpdate => T("正在安装，完成后会自动重新启动…", "Installing; ZnKeyboard will restart…");
     public static string UpdateFailed => T("更新没有完成", "The update didn't finish");
     public static string UpdateFailedNote(string reason) => T($"{reason}\n当前版本没有改动。要打开下载页手动安装吗？", $"{reason}\nNothing was changed. Open the download page to install it yourself?");
+    public static string UpdateDidNotStart => T("新版本没有成功启动，可能被安全软件拦截了。", "The new version didn't start; security software may have stopped it.");
     public static string UpdateDownloadFailed => T("下载失败，请检查网络。", "The download failed. Check your connection.");
     public static string UpdateDamaged => T("下载的文件不完整或不是 ZnKeyboard，为安全起见没有安装。", "The download was incomplete or not ZnKeyboard, so it wasn't installed.");
     public static string AutomaticUpdates => T("自动检查更新", "Check for updates automatically");
@@ -159,5 +159,5 @@ public static class L
     public static string DiagnosticLog => T("诊断日志", "Diagnostic log");
     public static string DiagnosticLogNote => T("遇到问题时发给我们，不包含任何文字内容", "Send it when something goes wrong; it never contains your text");
     public static string Open => T("打开", "Open");
-    public static string TrayHint => T("ZnKeyboard：选中文字后按快捷键润色或翻译", "ZnKeyboard: select text and press a shortcut");
+    public static string TrayHint => T("ZnKeyboard：选中文字后按快捷键翻译", "ZnKeyboard: select text and press a shortcut");
 }

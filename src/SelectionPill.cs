@@ -17,7 +17,7 @@ using TextBlock = System.Windows.Controls.TextBlock;
 namespace ZnKeyboard;
 
 /// <summary>
-/// Shows 润色 | AI 翻译为 [EN ▾] next to text the user selects in an editable field: after a mouse
+/// Shows AI 翻译为 [EN ▾] next to text the user selects in an editable field: after a mouse
 /// drag, double or triple click (at the pointer), or Ctrl+A / Shift+arrows (under the selection,
 /// where the app reports it). Text selected with the mouse while reading (a web page, a document)
 /// gets 翻译为 [ZH ▾] alone, into the reading language screenshots use. Typing, clicking elsewhere or switching windows
@@ -165,6 +165,8 @@ public sealed class SelectionPill : IDisposable
         {
             var message = wParam.ToInt32();
             var data = Marshal.PtrToStructure<Native.KBDLLHOOKSTRUCT>(lParam);
+            // ZnKeyboard's own simulated Ctrl+C and Ctrl+V are not the user typing.
+            if ((data.Flags & Native.LLKHF_INJECTED) != 0) return Native.CallNextHookEx(keyboardHook, code, wParam, lParam);
             window.Dispatcher.BeginInvoke(() => OnKey(message is Native.WM_KEYDOWN or Native.WM_SYSKEYDOWN, data.VkCode));
         }
         return Native.CallNextHookEx(keyboardHook, code, wParam, lParam);

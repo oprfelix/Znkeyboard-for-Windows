@@ -19,6 +19,7 @@ public static class TextBridge
 {
     public static async Task<string?> SelectedTextAsync()
     {
+        lastReadTop = null;
         var text = await Task.Run(AutomationSelectedText).WaitAsync(TimeSpan.FromMilliseconds(600)).ContinueWith(t => t.IsCompletedSuccessfully ? t.Result : null);
         if (!string.IsNullOrEmpty(text)) return text;
         // Copying a whole document can take a moment in some apps; a missed Ctrl+C gets one more try.
@@ -45,10 +46,14 @@ public static class TextBridge
         DebugLog.Note($"replace in {Native.Describe(Native.GetForegroundWindow())}: selection {outcome}");
         var saved = ClipboardSnapshot.Take();
         if (!TrySetClipboard(() => Clipboard.SetDataObject(Borrowed(text), copy: true))) return;
+        var ours = Native.GetClipboardSequenceNumber();
         await ReleaseModifiersAsync();
         Native.SendCtrl(Native.VK_V);
-        // The target app reads the clipboard asynchronously; give it time before restoring.
-        await Task.Delay(600);
+        // The target app reads the clipboard asynchronously, and a slow one (Electron, a browser just
+        // woken up) can take most of a second; restoring sooner would paste the old clipboard.
+        await Task.Delay(1200);
+        // Something else copied meanwhile (the user, a clipboard manager): theirs stays.
+        if (Native.GetClipboardSequenceNumber() != ours) return;
         saved.Restore();
     }
 
@@ -128,17 +133,40 @@ public static class TextBridge
             var selected = string.Concat(text.GetSelection().Select(r => r.GetText(-1)));
             static string Flat(string s) => s.Replace("\r\n", "\n").Replace('\r', '\n');
             if (Flat(selected) == Flat(original)) return "kept";
-            var found = text.DocumentRange.FindText(original, backward: false, ignoreCase: false)
-                ?? text.DocumentRange.FindText(Flat(original), backward: false, ignoreCase: false);
-            if (found == null) return "lost, original not found";
-            found.Select();
-            return "reselected";
+            // The same text can appear more than once (a repeated line, a signature): take the
+            // occurrence nearest where the selection was read.
+            var matches = Occurrences(text.DocumentRange, original);
+            if (matches.Count == 0) matches = Occurrences(text.DocumentRange, Flat(original));
+            if (matches.Count == 0) return "lost, original not found";
+            var best = lastReadTop is { } top
+                ? matches.OrderBy(m => m.GetBoundingRectangles() is { Length: > 0 } r ? Math.Abs(r[0].Top - top) : double.MaxValue).First()
+                : matches[0];
+            best.Select();
+            return $"reselected ({matches.Count} found)";
         }
         catch (Exception e)
         {
             return "unknown (" + e.GetType().Name + ")";
         }
     }
+
+    /// <summary>Every place <paramref name="needle"/> appears in <paramref name="document"/>, at most 20.</summary>
+    private static List<TextPatternRange> Occurrences(TextPatternRange document, string needle)
+    {
+        var found = new List<TextPatternRange>();
+        var rest = document.Clone();
+        while (found.Count < 20 && rest.FindText(needle, backward: false, ignoreCase: false) is { } match)
+        {
+            found.Add(match);
+            // Search on from the end of this match.
+            rest.MoveEndpointByRange(TextPatternRangeEndpoint.Start, match, TextPatternRangeEndpoint.End);
+            if (rest.CompareEndpoints(TextPatternRangeEndpoint.Start, rest, TextPatternRangeEndpoint.End) >= 0) break;
+        }
+        return found;
+    }
+
+    /// <summary>Where on screen (top, device pixels) the last selection read through UI Automation was.</summary>
+    private static double? lastReadTop;
 
     private static string? AutomationSelectedText()
     {
@@ -148,6 +176,7 @@ public static class TextBridge
             if (focused == null || focused.Current.ProcessId == Environment.ProcessId) return null;
             if (!focused.TryGetCurrentPattern(TextPattern.Pattern, out var pattern)) return null;
             var ranges = ((TextPattern)pattern).GetSelection();
+            if (ranges.Length > 0 && ranges[0].GetBoundingRectangles() is { Length: > 0 } rects) lastReadTop = rects[0].Top;
             return string.Concat(ranges.Select(r => r.GetText(-1)));
         }
         catch (Exception)
@@ -167,9 +196,43 @@ public static class TextBridge
         for (var i = 0; i < 40 && Native.GetClipboardSequenceNumber() == before; i++) await Task.Delay(25);
         if (Native.GetClipboardSequenceNumber() == before) return null;
         string? text = null;
-        TrySetClipboard(() => text = Clipboard.ContainsText() ? Clipboard.GetText() : null);
+        TrySetClipboard(() =>
+        {
+            // Plain text, or the text of rich content when an app copies only that.
+            if (Clipboard.ContainsText()) text = Clipboard.GetText();
+            else if (Clipboard.ContainsText(TextDataFormat.Rtf)) text = PlainFromRtf(Clipboard.GetText(TextDataFormat.Rtf));
+            else if (Clipboard.ContainsText(TextDataFormat.Html)) text = PlainFromHtml(Clipboard.GetText(TextDataFormat.Html));
+        });
         saved.Restore();
         return text;
+    }
+
+    private static string? PlainFromRtf(string rtf)
+    {
+        try
+        {
+            var document = new System.Windows.Documents.FlowDocument();
+            var range = new System.Windows.Documents.TextRange(document.ContentStart, document.ContentEnd);
+            using var stream = new System.IO.MemoryStream(Encoding.UTF8.GetBytes(rtf));
+            range.Load(stream, DataFormats.Rtf);
+            return range.Text.TrimEnd('\r', '\n');
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>The fragment of a CF_HTML clipboard entry, tags dropped and entities decoded.</summary>
+    private static string? PlainFromHtml(string html)
+    {
+        var start = html.IndexOf("<!--StartFragment-->", StringComparison.OrdinalIgnoreCase);
+        var end = html.IndexOf("<!--EndFragment-->", StringComparison.OrdinalIgnoreCase);
+        if (start >= 0 && end > start) html = html[(start + 20)..end];
+        html = System.Text.RegularExpressions.Regex.Replace(html, @"<(br|/p|/div|/li|/h\d)\b[^>]*>", "\n", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        html = System.Text.RegularExpressions.Regex.Replace(html, "<[^>]+>", "");
+        var text = System.Net.WebUtility.HtmlDecode(html).Trim();
+        return text.Length == 0 ? null : text;
     }
 
     /// <summary>Waits for Alt, Shift and Win from the shortcut to be let go, then lifts any still held.</summary>

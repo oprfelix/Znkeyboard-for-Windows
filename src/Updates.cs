@@ -184,6 +184,11 @@ public static class Updates
             DebugLog.Note($"update {release.Version} downloaded, starting it");
             // The new copy installs itself, asks this one to quit and starts in its place.
             Process.Start(new ProcessStartInfo(path, Installer.AutoUpdateArg) { UseShellExecute = false, WorkingDirectory = DownloadFolder });
+            // Normally this copy is asked to quit within seconds. Still here after a minute, the new one
+            // didn't take over (it crashed, or security software stopped it): say so instead of waiting forever.
+            await Task.Delay(TimeSpan.FromSeconds(60));
+            if (progressWindow == null) return;
+            throw new UpdateException(L.UpdateDidNotStart);
         }
         catch (OperationCanceledException) when (cancel.IsCancellationRequested)
         {
